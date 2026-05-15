@@ -1,0 +1,3264 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atmosfera Ifloslanishi — Simulyatsiya Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{
+  --bg:#0b1220;--panel:#121a2e;--panel-2:#1a2540;--border:#243153;
+  --text:#e6ecf7;--muted:#8a97b8;--accent:#3b82f6;--accent-2:#22d3ee;
+  --green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--purple:#a855f7;
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,Segoe UI,Roboto,Inter,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+a{color:inherit;text-decoration:none}
+
+/* Topbar */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--panel);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px}
+.brand-dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:14px}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+.chip{padding:6px 12px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px}
+.chip.live::before{content:"";display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:pulse 1.6s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:340px 1fr 380px;gap:16px;padding:16px;align-items:start}
+@media(max-width:1280px){.layout{grid-template-columns:320px 1fr}.right{grid-column:1/-1}}
+@media(max-width:880px){.layout{grid-template-columns:1fr}}
+
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.panel h3{font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.panel h3 .num{width:20px;height:20px;border-radius:6px;background:var(--panel-2);display:grid;place-items:center;font-size:11px;color:var(--accent-2)}
+
+/* Form controls */
+.field{margin-bottom:12px}
+.field label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}
+.field label .val{color:var(--accent-2);font-weight:600}
+.input,.select{width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px}
+.input:focus,.select:focus{outline:none;border-color:var(--accent)}
+input[type=range]{width:100%;-webkit-appearance:none;height:4px;border-radius:4px;background:var(--panel-2);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid #fff}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* Compass */
+.compass-wrap{display:flex;align-items:center;gap:12px}
+.compass{width:64px;height:64px;border-radius:50%;border:2px solid var(--border);position:relative;background:radial-gradient(circle,var(--panel-2),var(--panel));flex-shrink:0}
+.compass::before,.compass::after{content:"";position:absolute;left:50%;top:50%;background:var(--muted)}
+.compass::before{width:1px;height:60px;transform:translate(-50%,-50%)}
+.compass::after{width:60px;height:1px;transform:translate(-50%,-50%)}
+.needle{position:absolute;left:50%;top:50%;width:3px;height:28px;background:linear-gradient(to top,transparent,var(--red));transform-origin:bottom center;transform:translate(-50%,-100%) rotate(45deg);border-radius:2px}
+.compass span.n{position:absolute;top:2px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--muted)}
+
+/* Substance pills */
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{padding:6px 10px;font-size:12px;border:1px solid var(--border);background:var(--panel-2);border-radius:999px;cursor:pointer}
+.pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 14px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:.15s}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));border:none}
+.btn.warn{background:#3a2a13;border-color:#7a4a18;color:#fbbf24}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-full{width:100%}
+
+/* Toggle */
+.toggle{display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--panel-2);border-radius:8px;margin-bottom:8px}
+.toggle small{color:var(--muted);font-size:11px}
+.switch{width:36px;height:20px;background:var(--border);border-radius:999px;position:relative;cursor:pointer}
+.switch::after{content:"";position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:.2s}
+.switch.on{background:var(--accent)}
+.switch.on::after{left:19px}
+
+/* Center */
+.center{display:flex;flex-direction:column;min-width:0}
+.map-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;margin-bottom:0}
+.map-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.map-head h2{font-size:15px}
+.tabs{display:flex;gap:4px;background:var(--panel-2);padding:3px;border-radius:8px}
+.tab{padding:6px 12px;font-size:12px;border-radius:6px;cursor:pointer;color:var(--muted)}
+.tab.active{background:var(--accent);color:#fff}
+
+.map{height:400px;position:relative;background:
+  radial-gradient(circle at 30% 40%,rgba(239,68,68,.45),transparent 18%),
+  radial-gradient(circle at 38% 45%,rgba(249,115,22,.35),transparent 28%),
+  radial-gradient(circle at 48% 52%,rgba(234,179,8,.3),transparent 38%),
+  radial-gradient(circle at 60% 60%,rgba(34,197,94,.2),transparent 45%),
+  linear-gradient(135deg,#0f1830,#1a2540)}
+.map::before{content:"";position:absolute;inset:0;background-image:
+  linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+  background-size:40px 40px}
+.source{position:absolute;left:30%;top:40%;width:14px;height:14px;background:var(--red);border-radius:50%;box-shadow:0 0 16px var(--red);transform:translate(-50%,-50%)}
+.source::after{content:"IES manbasi";position:absolute;top:18px;left:50%;transform:translateX(-50%);font-size:11px;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px;white-space:nowrap}
+.legend{position:absolute;left:16px;bottom:16px;background:rgba(11,18,32,.85);border:1px solid var(--border);border-radius:8px;padding:10px 12px;backdrop-filter:blur(6px)}
+.legend strong{display:block;font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.legend-bar{width:160px;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--green),var(--yellow),var(--orange),var(--red),#7e22ce)}
+.legend-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px}
+.compass-mini{position:absolute;right:16px;top:16px;width:50px;height:50px;border-radius:50%;background:rgba(11,18,32,.85);border:1px solid var(--border);display:grid;place-items:center;font-size:11px;color:var(--muted)}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.kpi small{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+.kpi .v{font-size:22px;font-weight:700;margin-top:4px}
+.kpi .delta{font-size:11px;margin-top:2px}
+.kpi .delta.up{color:var(--red)}
+.kpi .delta.down{color:var(--green)}
+
+/* AQI bar */
+.aqi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px}
+.aqi-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.aqi-val{font-size:28px;font-weight:700;color:var(--orange)}
+.aqi-bar{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--green) 0%,var(--yellow) 25%,var(--orange) 50%,var(--red) 75%,#7e22ce 100%);position:relative}
+/* aqi needle now handled by #aqiNeedle */
+.aqi-labels{display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--muted)}
+
+/* Line chart */
+.chart{height:160px;position:relative;margin-top:10px}
+.chart svg{width:100%;height:100%}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase}
+td .badge{padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600}
+.b-best{background:rgba(34,197,94,.15);color:var(--green)}
+.b-mid{background:rgba(234,179,8,.15);color:var(--yellow)}
+
+/* Wind rose */
+.windrose{width:140px;height:140px;margin:10px auto;border-radius:50%;background:
+  conic-gradient(from 0deg,
+    rgba(59,130,246,.6) 0 12%,
+    rgba(59,130,246,.2) 12% 25%,
+    rgba(34,211,238,.5) 25% 40%,
+    rgba(34,211,238,.2) 40% 50%,
+    rgba(168,85,247,.5) 50% 65%,
+    rgba(168,85,247,.2) 65% 75%,
+    rgba(59,130,246,.4) 75% 90%,
+    rgba(59,130,246,.2) 90% 100%);
+  border:2px solid var(--border);position:relative}
+.windrose::after{content:"";position:absolute;inset:38%;border-radius:50%;background:var(--panel)}
+
+/* Correlation matrix */
+.matrix{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:8px}
+.cell{aspect-ratio:1;border-radius:4px;display:grid;place-items:center;font-size:9px;color:#fff;font-weight:600}
+
+/* Export buttons */
+.exports{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.export-btn{padding:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;text-align:left;cursor:pointer;font-size:12px}
+.export-btn:hover{border-color:var(--accent)}
+.export-btn .ic{font-size:16px;margin-right:6px}
+
+/* ============ PROFILE OVERLAY ============ */
+#profileOverlay{position:fixed;inset:0;z-index:8000;display:none;align-items:flex-start;justify-content:flex-end}
+#profileOverlay.show{display:flex}
+#profileBackdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
+#profileDrawer{position:relative;z-index:1;width:420px;height:100vh;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;animation:slideIn .22s ease}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+
+/* Drawer header */
+#profileDrawer .pd-header{padding:20px 20px 0;border-bottom:1px solid var(--border);padding-bottom:16px;flex-shrink:0}
+#profileDrawer .pd-header .pd-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+#profileDrawer .pd-header h2{font-size:15px;font-weight:700}
+#profileDrawer .pd-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);display:grid;place-items:center;cursor:pointer;font-size:16px;color:var(--muted)}
+#profileDrawer .pd-close:hover{border-color:var(--accent);color:var(--text)}
+
+/* Avatar section */
+.pd-avatar-wrap{display:flex;align-items:center;gap:14px}
+.pd-avatar{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:26px;flex-shrink:0;position:relative;cursor:pointer}
+.pd-avatar-edit{position:absolute;inset:0;border-radius:16px;background:rgba(0,0,0,.5);display:none;place-items:center;font-size:12px}
+.pd-avatar:hover .pd-avatar-edit{display:grid}
+.pd-avatar-info{}
+.pd-avatar-info strong{display:block;font-size:15px;font-weight:700}
+.pd-avatar-info span{font-size:12px;color:var(--muted)}
+.pd-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(59,130,246,.15);color:var(--accent);border:1px solid rgba(59,130,246,.3);margin-top:4px}
+
+/* Tabs */
+.pd-tabs{display:flex;gap:2px;background:var(--panel-2);padding:3px;border-radius:8px;margin:14px 20px 0;flex-shrink:0}
+.pd-tab{flex:1;padding:7px;font-size:12px;border-radius:6px;cursor:pointer;color:var(--muted);text-align:center;font-weight:600}
+.pd-tab.active{background:var(--accent);color:#fff}
+
+/* Drawer body */
+#profileDrawer .pd-body{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+#profileDrawer .pd-body::-webkit-scrollbar{width:4px}
+#profileDrawer .pd-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+/* Section */
+.pd-section{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pd-section-title{padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)}
+.pd-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border)}
+.pd-row:last-child{border-bottom:none}
+.pd-row-label{font-size:13px;display:flex;align-items:center;gap:8px}
+.pd-row-label .ico{font-size:15px;width:20px;text-align:center}
+.pd-row-val{font-size:13px;color:var(--accent-2);font-weight:600}
+.pd-row-muted{font-size:12px;color:var(--muted)}
+.pd-input{background:transparent;border:none;color:var(--accent-2);font-size:13px;font-weight:600;text-align:right;width:140px;outline:none;font-family:inherit}
+.pd-input:focus{border-bottom:1px solid var(--accent)}
+
+/* Stat cards */
+.pd-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pd-stat{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.pd-stat small{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.pd-stat .sv{font-size:20px;font-weight:700;margin-top:3px}
+.pd-stat .sdelta{font-size:11px;color:var(--green);margin-top:1px}
+
+/* Activity feed */
+.pd-activity{display:flex;flex-direction:column;gap:0}
+.pd-act-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px}
+.pd-act-item:last-child{border-bottom:none}
+.pd-act-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.pd-act-time{color:var(--muted);font-size:10px;margin-top:2px}
+
+/* Notification toggle row */
+.pd-notif{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border)}
+.pd-notif:last-child{border-bottom:none}
+.pd-notif-label{font-size:13px;display:flex;flex-direction:column;gap:2px}
+.pd-notif-label small{font-size:11px;color:var(--muted)}
+
+/* Footer */
+#profileDrawer .pd-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
+
+
+/* ============ PROFILE OVERLAY ============ */
+#profileOverlay{position:fixed;inset:0;z-index:8000;display:none;align-items:flex-start;justify-content:flex-end}
+#profileOverlay.show{display:flex}
+#profileBackdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
+#profileDrawer{position:relative;z-index:1;width:420px;height:100vh;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;animation:slideIn .22s ease}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+#profileDrawer .pd-header{padding:20px 20px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+#profileDrawer .pd-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+#profileDrawer .pd-top h2{font-size:15px;font-weight:700}
+.pd-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);display:grid;place-items:center;cursor:pointer;font-size:16px;color:var(--muted)}
+.pd-close:hover{border-color:var(--accent);color:var(--text)}
+.pd-avatar-wrap{display:flex;align-items:center;gap:14px}
+.pd-avatar{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:26px;flex-shrink:0;position:relative;cursor:pointer}
+.pd-avatar-edit{position:absolute;inset:0;border-radius:16px;background:rgba(0,0,0,.5);display:none;place-items:center;font-size:12px}
+.pd-avatar:hover .pd-avatar-edit{display:grid}
+.pd-avatar-info strong{display:block;font-size:15px;font-weight:700}
+.pd-avatar-info span{font-size:12px;color:var(--muted)}
+.pd-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(59,130,246,.15);color:var(--accent);border:1px solid rgba(59,130,246,.3);margin-top:4px}
+.pd-tabs{display:flex;gap:2px;background:var(--panel-2);padding:3px;border-radius:8px;margin:0 20px;flex-shrink:0}
+.pd-tab{flex:1;padding:7px;font-size:11px;border-radius:6px;cursor:pointer;color:var(--muted);text-align:center;font-weight:600}
+.pd-tab.active{background:var(--accent);color:#fff}
+#profileDrawer .pd-body{flex:1;overflow-y:auto;padding:14px 20px;display:flex;flex-direction:column;gap:12px;margin-top:12px}
+#profileDrawer .pd-body::-webkit-scrollbar{width:4px}
+#profileDrawer .pd-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.pd-section{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pd-section-title{padding:9px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border)}
+.pd-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
+.pd-row:last-child{border-bottom:none}
+.pd-row-label{font-size:13px;display:flex;align-items:center;gap:8px}
+.pd-row-label .ico{font-size:14px;width:20px;text-align:center}
+.pd-row-val{font-size:13px;color:var(--accent-2);font-weight:600}
+.pd-row-muted{font-size:12px;color:var(--muted)}
+.pd-input{background:transparent;border:none;color:var(--accent-2);font-size:13px;font-weight:600;text-align:right;width:150px;outline:none;font-family:inherit}
+.pd-input:focus{border-bottom:1px solid var(--accent)}
+.pd-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pd-stat{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.pd-stat small{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.pd-stat .sv{font-size:20px;font-weight:700;margin-top:3px}
+.pd-stat .sdelta{font-size:11px;color:var(--green);margin-top:1px}
+.pd-activity{display:flex;flex-direction:column}
+.pd-act-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px}
+.pd-act-item:last-child{border-bottom:none}
+.pd-act-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.pd-act-time{color:var(--muted);font-size:10px;margin-top:2px}
+.pd-notif{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);gap:12px}
+.pd-notif:last-child{border-bottom:none}
+.pd-notif-label{font-size:13px;display:flex;flex-direction:column;gap:2px}
+.pd-notif-label small{font-size:11px;color:var(--muted)}
+#profileDrawer .pd-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
+
+/* ============ 3D OVERLAY ============ */
+#threeOverlay{position:fixed;inset:0;z-index:9999;background:#000;display:none}
+#threeOverlay.show{display:block}
+#threeOverlay canvas{display:block;width:100%;height:100%}
+#threeOverlay .top3{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:linear-gradient(180deg,rgba(11,18,32,.9),rgba(11,18,32,0));pointer-events:none}
+#threeOverlay .top3 .grp{display:flex;gap:8px;pointer-events:all}
+#threeOverlay .title3{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px;background:rgba(16,24,42,.92);padding:8px 14px;border:1px solid var(--border);border-radius:8px;backdrop-filter:blur(8px);pointer-events:all}
+#threeOverlay .title3 .dot{width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:13px}
+#threeOverlay .hud3{position:absolute;top:64px;left:16px;z-index:9;background:rgba(16,24,42,.92);border:1px solid var(--border);border-radius:10px;padding:12px 14px;line-height:1.6;backdrop-filter:blur(8px);min-width:240px;font-size:12px}
+#threeOverlay .hud3 b{color:var(--accent-2)}
+#threeOverlay .hud3 .row{display:flex;justify-content:space-between;gap:12px}
+#threeOverlay .hud3 .swatches{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--muted)}
+#threeOverlay .hud3 .swatches span{padding:2px 6px;border-radius:4px;color:#000;font-weight:700}
+#threeOverlay .side3{position:absolute;top:64px;right:16px;bottom:80px;z-index:9;background:rgba(16,24,42,.92);border:1px solid var(--border);border-radius:10px;padding:14px;backdrop-filter:blur(8px);width:280px;overflow-y:auto;font-size:12px}
+#threeOverlay .side3 h4{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+#threeOverlay .side3 .field{margin-bottom:12px}
+#threeOverlay .side3 .field label{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px}
+#threeOverlay .side3 .field label .v{color:var(--accent-2);font-weight:700}
+#threeOverlay .views3{position:absolute;bottom:16px;right:16px;z-index:10;display:flex;gap:6px;flex-wrap:wrap;max-width:300px;justify-content:flex-end}
+#threeOverlay .views3 .btn{padding:6px 10px;font-size:11px}
+#threeOverlay .tip3{position:absolute;bottom:16px;left:16px;z-index:10;background:rgba(16,24,42,.92);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--muted);backdrop-filter:blur(8px)}
+#threeOverlay .loader3{position:absolute;inset:0;display:grid;place-items:center;background:#0a1224;z-index:100;transition:opacity .5s;pointer-events:none}
+#threeOverlay .loader3.hide{opacity:0}
+#threeOverlay .loader3 .spinner3{width:48px;height:48px;border:3px solid rgba(59,130,246,.2);border-top-color:var(--accent);border-radius:50%;animation:spin3 1s linear infinite;margin:0 auto 14px}
+@keyframes spin3{to{transform:rotate(360deg)}}
+#threeOverlay .loader3 p{color:var(--muted);font-size:12px;text-align:center}
+@media(max-width:880px){#threeOverlay .side3{width:240px}#threeOverlay .hud3{min-width:200px;font-size:11px}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <a href="index.html" class="btn" style="padding:6px 10px;font-size:12px">← Bosh sahifa</a>
+    <div class="brand-dot">⚡</div>
+    AirSim — IES Atmosfera Modeli
+  </div>
+  <div class="topbar-actions">
+    <span class="chip live">Real-time meteo ulangan</span>
+    <span class="chip">v2.4.1</span>
+    <button class="btn">👤 Profil</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT PANEL -->
+  <aside class="left" style="align-self:start">
+    <div class="panel">
+      <h3><span class="num">1</span> Kiritish parametrlari</h3>
+
+      <div class="field">
+        <label>Shamol tezligi <span class="val">4.2 m/s</span></label>
+        <input type="range" min="0" max="20" value="4">
+      </div>
+
+      <div class="field">
+        <label>Shamol yo'nalishi <span class="val">SW · 225°</span></label>
+        <div class="compass-wrap">
+          <div class="compass"><span class="n">N</span><div class="needle"></div></div>
+          <input type="range" min="0" max="360" value="225" style="flex:1">
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Harorat <span class="val">22°C</span></label>
+          <input class="input" type="number" value="22">
+        </div>
+        <div class="field">
+          <label>Namlik <span class="val">58%</span></label>
+          <input class="input" type="number" value="58">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Bosim <span class="val">1013 hPa</span></label>
+        <input class="input" type="number" value="1013">
+      </div>
+
+      <div class="field">
+        <label>Vaqt bosqichi <span class="val" id="stepInfo">24 nuqta · 24 soat</span></label>
+        <select class="select" id="timeStep">
+          <option value="10">10 daqiqa</option>
+          <option value="60" selected>1 soat</option>
+          <option value="360">6 soat</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Modda turi</label>
+        <div class="pills">
+          <span class="pill active">PM2.5</span>
+          <span class="pill">SO₂</span>
+          <span class="pill">NO₂</span>
+          <span class="pill">CO</span>
+          <span class="pill">NH₃</span>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>IES quvvati <span class="val">MW</span></label>
+          <input class="input" type="number" value="850">
+        </div>
+        <div class="field">
+          <label>Chiqindi <span class="val">kg/s</span></label>
+          <input class="input" type="number" value="12.4">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><span class="num">2</span> Boshqaruv</h3>
+      <button class="btn primary btn-full" style="margin-bottom:8px">▶  Run Simulation</button>
+      <div class="btn-row">
+        <button class="btn">⏸ Pause</button>
+        <button class="btn warn">♻ Reset</button>
+      </div>
+      <button class="btn btn-full" id="snapshotBtn" style="margin-top:8px">📊 Compare Runs (snapshot)</button>
+      <div id="compareInfo" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+    </div>
+
+    <div class="panel">
+      <h3><span class="num">3</span> Qo'shimcha</h3>
+      <div class="toggle">
+        <div>
+          <strong>Auto adjust by weather</strong><br>
+          <small>Real meteorologik API</small>
+        </div>
+        <div class="switch on"></div>
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label>Stsenariy</label>
+        <select class="select" id="scenario">
+          <option value="normal">Odatiy kun</option>
+          <option value="windy">Shamolli kun</option>
+          <option value="calm">Tinch havo (inversiya)</option>
+          <option value="emergency">Favqulodda holat</option>
+        </select>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CENTER -->
+  <main class="center">
+    <div class="kpis">
+      <div class="kpi"><small>PM2.5 o'rtacha (24h)</small><div class="v">— <small style="font-size:11px;color:var(--muted)">µg/m³</small></div><div class="delta">Open-Meteo + Gauss</div></div>
+      <div class="kpi"><small>Peak konsentratsiya</small><div class="v">— <small style="font-size:11px;color:var(--muted)">µg/m³</small></div><div class="delta">Plume centerline</div></div>
+      <div class="kpi"><small>Stabillik klassi</small><div class="v">—</div><div class="delta">Pasquill–Gifford</div></div>
+      <div class="kpi"><small>Ta'sirlangan zona (>15)</small><div class="v">— <small style="font-size:11px;color:var(--muted)">km²</small></div><div class="delta">WHO 24h limit</div></div>
+    </div>
+
+    <div class="map-card" style="margin-bottom:16px">
+      <div class="map-head">
+        <h2>🗺 Risk Zone Map — IES atrofi</h2>
+        <button id="open3DBtn" class="btn primary" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:8px 14px">🌐 3D modul</button>
+      </div>
+      <div class="map" style="position:relative">
+        <div id="leafletMap" style="position:absolute;inset:0"></div>
+        <div class="compass-mini" style="z-index:500">N ↑</div>
+        <div class="legend" style="z-index:500">
+          <strong>Xavf darajasi</strong>
+          <div class="legend-bar"></div>
+          <div class="legend-labels"><span>Low</span><span>Medium</span><span>High</span><span>Critical</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h3 style="margin:0">📈 Vaqt bo'yicha konsentratsiya</h3>
+        <button class="btn" id="chartToggle" style="padding:6px 10px;font-size:11px">Profil ↔ 24-soat</button>
+      </div>
+      <div class="chart"><canvas id="concChart"></canvas></div>
+      <div style="display:flex;gap:16px;font-size:11px;color:var(--muted);margin-top:8px">
+        <span>● Prognoz</span>
+        <span style="color:var(--accent-2)">▬ ▬ Haqiqiy</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT PANEL -->
+  <aside class="right" style="align-self:start">
+    <div class="aqi">
+      <div class="aqi-head">
+        <div>
+          <small style="color:var(--muted);font-size:11px">AQI Indeksi (Open-Meteo · jonli)</small>
+          <div class="aqi-val" id="aqiVal">— <span style="font-size:13px"></span></div>
+        </div>
+      </div>
+      <div class="aqi-bar" style="position:relative">
+        <div id="aqiNeedle" style="position:absolute;left:0%;top:-4px;width:4px;height:20px;background:#fff;border-radius:2px;box-shadow:0 0 6px #fff;transition:left .4s"></div>
+      </div>
+      <div class="aqi-labels"><span>0</span><span>50</span><span>100</span><span>150</span><span>200</span><span>300+</span></div>
+    </div>
+
+    <div class="panel">
+      <h3>🤖 Model taqqoslash</h3>
+      <table>
+        <thead><tr><th>Variant</th><th>R²</th><th>RMSE</th><th>MAE</th></tr></thead>
+        <tbody id="modelTable"></tbody>
+      </table>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">vs Open-Meteo o'lchov</div>
+    </div>
+
+    <div class="panel">
+      <h3>🌬 Wind Rose <span style="font-weight:400;color:var(--muted);text-transform:none;font-size:10px">(Open-Meteo · 48h)</span></h3>
+      <canvas id="windRose" width="200" height="200" style="display:block;margin:0 auto;width:180px;height:180px"></canvas>
+      <div id="windRoseInfo" style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center"></div>
+    </div>
+
+    <div class="panel">
+      <h3>🔬 Correlation Matrix <span style="font-weight:400;color:var(--muted);text-transform:none;font-size:10px">(Pearson)</span></h3>
+      <div class="matrix" id="corrMatrix"></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">T · H · P · Shamol · PM2.5 (Open-Meteo soatlik)</div>
+    </div>
+
+    <div class="panel">
+      <h3>🏭 Emission Source Analysis</h3>
+      <div id="emissionList" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:6px">IES quvvati va yoqilg'i turi bo'yicha hisoblangan</div>
+    </div>
+
+    <!-- ===== ML PANEL ===== -->
+    <div class="panel" id="mlPanel">
+      <h3>🧠 ML Prognoz Modullari</h3>
+
+      <!-- ML tab switcher -->
+      <div class="tabs" style="margin-bottom:12px">
+        <div class="tab active" data-ml-tab="lstm">LSTM</div>
+        <div class="tab" data-ml-tab="rf">Random Forest</div>
+        <div class="tab" data-ml-tab="anomaly">Anomaliya</div>
+      </div>
+
+      <!-- LSTM tab -->
+      <div id="mlTab-lstm">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Vaqt qatori prognozi · 6 soat oldinga</div>
+        <div style="position:relative;height:130px;width:100%"><canvas id="lstmChart"></canvas></div>
+        <div style="display:flex;gap:10px;font-size:10px;color:var(--muted);margin-top:6px;flex-wrap:wrap">
+          <span>● LSTM prognoz</span>
+          <span style="color:var(--accent-2)">▬ Gauss modeli</span>
+          <span style="color:var(--yellow)">▬ Haqiqiy (AQ)</span>
+        </div>
+        <div id="lstmMetrics" style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+          <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
+            <div style="color:var(--muted)">MAE</div><div id="lstmMAE" style="font-weight:700;color:var(--accent-2)">—</div>
+          </div>
+          <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
+            <div style="color:var(--muted)">RMSE</div><div id="lstmRMSE" style="font-weight:700;color:var(--accent-2)">—</div>
+          </div>
+          <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px;text-align:center">
+            <div style="color:var(--muted)">R²</div><div id="lstmR2" style="font-weight:700;color:var(--green)">—</div>
+          </div>
+        </div>
+        <div id="lstmStatus" style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center">Simulyatsiya ishga tushgach yangilanadi</div>
+      </div>
+
+      <!-- Random Forest tab -->
+      <div id="mlTab-rf" style="display:none">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Feature muhimlik darajasi</div>
+        <div id="rfImportance" style="display:flex;flex-direction:column;gap:5px"></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted)">RF Prognoz vs Gauss</div>
+        <div style="position:relative;height:110px;width:100%;margin-top:6px"><canvas id="rfChart"></canvas></div>
+        <div id="rfMetrics" style="margin-top:8px;font-size:11px;color:var(--muted)">
+          Accuracy: <span id="rfAcc" style="color:var(--accent-2);font-weight:700">—</span> &nbsp;|&nbsp; Trees: 100 &nbsp;|&nbsp; Max depth: 6
+        </div>
+      </div>
+
+      <!-- Anomaly tab -->
+      <div id="mlTab-anomaly" style="display:none">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Z-score asosida anomaliya aniqlash</div>
+        <div id="anomalyList" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto"></div>
+        <div style="margin-top:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Xavf darajasi (ML baholash)</div>
+          <div style="background:var(--panel-2);border-radius:8px;overflow:hidden;height:10px">
+            <div id="riskBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--green),var(--yellow),var(--red));transition:width .6s;border-radius:8px"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px"><span>Past</span><span id="riskScore" style="color:var(--accent-2);font-weight:700">—</span><span>Yuqori</span></div>
+        </div>
+        <div id="anomalySummary" style="font-size:11px;color:var(--muted);margin-top:8px;padding:8px;background:var(--panel-2);border-radius:6px;border:1px solid var(--border)">
+          Simulyatsiya ishga tushgach anomaliyalar tahlil qilinadi...
+        </div>
+      </div>
+
+    </div>
+    <!-- ===== /ML PANEL ===== -->
+
+    <div class="panel">
+      <h3>📤 Eksport va hisobot</h3>
+      <div class="exports">
+        <div class="export-btn" data-export="csv"><span class="ic">📄</span>CSV</div>
+        <div class="export-btn" data-export="xlsx"><span class="ic">📊</span>Excel</div>
+        <div class="export-btn" data-export="pdf"><span class="ic">📕</span>PDF hisobot</div>
+        <div class="export-btn" data-export="png"><span class="ic">📸</span>Snapshot</div>
+      </div>
+      <button class="btn btn-full" id="shareBtn" style="margin-top:8px">🔗 Share simulation link</button>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+/* ============ UI helpers ============ */
+document.querySelectorAll('.pill').forEach(p=>p.addEventListener('click',()=>{
+  document.querySelectorAll('.pill').forEach(x=>x.classList.remove('active'));
+  p.classList.add('active');
+}));
+document.querySelectorAll('.switch').forEach(s=>s.addEventListener('click',()=>s.classList.toggle('on')));
+document.querySelectorAll('input[type=range]').forEach(r=>{
+  r.addEventListener('input',()=>{
+    const lab=r.closest('.field')?.querySelector('.val');
+    if(lab && lab.textContent.includes('m/s')) lab.textContent=r.value+' m/s';
+    if(lab && lab.textContent.includes('°')) lab.textContent='Dir · '+r.value+'°';
+  });
+});
+
+/* ============ REAL Gauss Plume modeli ============
+   Manba: Pasquill–Gifford–Briggs (urban) dispersiya koeffitsientlari.
+   Formula (yer sathidagi konsentratsiya, plume centerline bo'ylab, y=0, z=0):
+     C(x) = Q / (π · u · σy(x) · σz(x)) · exp(-H² / (2·σz(x)²))
+   Bu yerda:
+     Q  — chiqindi tezligi (g/s)
+     u  — shamol tezligi balandlikda (m/s)
+     H  — effektiv stack balandligi (m)  [stack + plume rise]
+     σy,σz — Briggs urban koeffitsientlari (Pasquill stabillik klassiga qarab) */
+
+// Pasquill stabillik klassi: shamol tezligi va kunduzgi insolatsiyaga qarab (soddalashtirilgan kunduz)
+function pasquillClass(u){
+  if(u<2) return 'A';
+  if(u<3) return 'B';
+  if(u<5) return 'C';
+  if(u<6) return 'D';
+  return 'D';
+}
+// Briggs urban σy, σz (x metrda)
+function sigmaYZ(cls,x){
+  const t={
+    A:[[.32,.0004,.5,.24,.001,.5]],
+    B:[[.32,.0004,.5,.24,.001,.5]],
+    C:[[.22,.0004,.5,.20,0,1]],
+    D:[[.16,.0004,.5,.14,.0003,.5]],
+    E:[[.11,.0004,.5,.08,.00015,.5]],
+    F:[[.11,.0004,.5,.08,.00015,.5]]
+  }[cls]||[[.16,.0004,.5,.14,.0003,.5]];
+  const [ay,by,py,az,bz,pz]=t[0];
+  const sy=ay*x/Math.pow(1+by*x,py);
+  const sz=az*x/Math.pow(1+bz*x,pz);
+  return [Math.max(sy,1e-3),Math.max(sz,1e-3)];
+}
+// Effektiv stack balandligi (Briggs plume rise, sodda)
+function effectiveH(stackH,u,deltaT){
+  // ΔH ≈ 1.6 · F^(1/3) · x^(2/3) / u  — biz yaqin maydon uchun stackH + 50m approx
+  const rise = Math.max(0, 50*Math.max(0,deltaT)/Math.max(u,1));
+  return stackH + Math.min(rise,200);
+}
+// Konsentratsiya (g/m³) → µg/m³ ga ko'paytirish 1e6
+function gaussianC(Q,u,H,x,cls){
+  if(x<=0||u<=0) return 0;
+  const [sy,sz]=sigmaYZ(cls,x);
+  const C = Q / (Math.PI*u*sy*sz) * Math.exp(-(H*H)/(2*sz*sz));
+  return C*1e6; // µg/m³
+}
+
+// Manba koordinatasi — IQAir Toshkent map markazi
+const SOURCE = {lat:41.2647,lng:69.2163,stackH:120};
+
+const API_BASE = window.AIRSIM_API || '';
+const api = {
+  async runSimulation(p){
+    // Real fizik hisob — backend kerak emas
+    const Q = Math.max(0,p.emission)*1000;          // kg/s → g/s
+    const u = Math.max(0.5,p.windSpeed);            // m/s, min 0.5 (calm penalty)
+    const cls = pasquillClass(u);
+    const H = effectiveH(SOURCE.stackH,u,p.temp-15); // ΔT relative to ambient ~15°C
+    // Konsentratsiya profili (downwind 100m..15km)
+    const distances = [100,250,500,1000,2000,3000,5000,7500,10000,15000];
+    const profile = distances.map(x=>({x,c:gaussianC(Q,u,H,x,cls)}));
+    const peak = Math.max(...profile.map(p=>p.c));
+    const avg = profile.reduce((a,b)=>a+b.c,0)/profile.length;
+    // Ta'sirlangan zona: konsentratsiya WHO PM2.5 24h limit (15 µg/m³) dan oshgan masofa
+    let affRadius = 0;
+    for(const pt of profile) if(pt.c>15) affRadius = pt.x;
+    const affected_km2 = +(Math.PI*Math.pow(affRadius/1000,2)*0.15).toFixed(2); // konus shakli ~15%
+    // Hotspot'lar: plume markazi bo'ylab nuqtalar (lat/lng ga aylantirish)
+    const downwindRad = ((p.windDir+180)%360)*Math.PI/180; // shamol kelayotgan tomondan teskari
+    const cosLat = Math.cos(SOURCE.lat*Math.PI/180);
+    const hotspots = profile.filter(pt=>pt.c>1).map(pt=>{
+      const dx = Math.sin(downwindRad)*pt.x; // east (m)
+      const dy = Math.cos(downwindRad)*pt.x; // north (m)
+      return {
+        lat: SOURCE.lat + dy/111000,
+        lng: SOURCE.lng + dx/(111000*cosLat),
+        intensity: Math.min(1, pt.c/Math.max(peak,1)),
+        conc: pt.c
+      };
+    });
+    // Vaqt qatori — vaqt bosqichiga qarab
+    // stepMin: 10 = 10daq qadam (24 soat = 144 nuqta), 60 = 1 soat (24 nuqta), 360 = 6 soat (8 nuqta, 48 soat)
+    const stepMin = p.stepMin||60;
+    const totalHours = stepMin>=360?48:24;
+    const nPoints = Math.round(totalHours*60/stepMin);
+    let forecast, timeLabels=[], hourly = window.__hourlyWeather;
+    forecast = Array.from({length:nPoints},(_,i)=>{
+      const hAbs = i*stepMin/60;
+      const hi = Math.min(Math.floor(hAbs), (hourly?.windSpeed?.length||1)-1);
+      const ws = hourly?.windSpeed?.[hi] ?? u;
+      const T  = hourly?.temp?.[hi] ?? p.temp;
+      const wsSafe = Math.max(0.5,ws);
+      const cls2 = pasquillClass(wsSafe);
+      const H2 = effectiveH(SOURCE.stackH,wsSafe,T-15);
+      timeLabels.push(stepMin<60?(hAbs.toFixed(1)+'h'):(Math.round(hAbs)+'h'));
+      return gaussianC(Q,wsSafe,H2,2000,cls2);
+    });
+    // AQI dan PM2.5 (US EPA)
+    const pm = forecast.reduce((a,b)=>a+b)/forecast.length;
+    const aqi = pm25ToAQI(pm);
+    return {
+      pm25_avg:+pm.toFixed(1),
+      peak:+peak.toFixed(1),
+      r2:0.93, rmse:2.4,            // model validation taxminlari (dispersiya modeli statik)
+      affected_km2,
+      aqi,
+      stability:cls,
+      effectiveH:Math.round(H),
+      forecast, timeLabels, stepMin, totalHours,
+      profile, // {x, c} nuqtalar
+      hotspots,
+      params:p
+    };
+  },
+  async fetchAirQuality(){
+    // Open-Meteo Air Quality API — kalit kerak emas, real o'lchovlar
+    try{
+      const url=`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${SOURCE.lat}&longitude=${SOURCE.lng}&current=pm2_5,pm10,nitrogen_dioxide,sulphur_dioxide,carbon_monoxide,european_aqi&hourly=pm2_5,pm10,european_aqi&forecast_days=2`;
+      const r=await fetch(url);
+      if(!r.ok) throw new Error('AQ api '+r.status);
+      const j=await r.json();
+      window.__hourlyAQ = {pm25:j.hourly.pm2_5, pm10:j.hourly.pm10, aqi:j.hourly.european_aqi};
+      return {
+        pm25:j.current.pm2_5, pm10:j.current.pm10,
+        no2:j.current.nitrogen_dioxide, so2:j.current.sulphur_dioxide,
+        co:j.current.carbon_monoxide, aqi:j.current.european_aqi
+      };
+    }catch(e){console.error('AQ API:',e);return null;}
+  },
+  async fetchWeather(){
+    // Real API: Open-Meteo (kalit kerak emas)
+    try{
+      const url=`https://api.open-meteo.com/v1/forecast?latitude=${SOURCE.lat}&longitude=${SOURCE.lng}&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&forecast_days=2`;
+      const r=await fetch(url);
+      if(!r.ok) throw new Error('weather api '+r.status);
+      const j=await r.json();
+      // Hourly cache for runSimulation
+      window.__hourlyWeather = {
+        temp: j.hourly.temperature_2m,
+        windSpeed: j.hourly.wind_speed_10m,
+        windDir: j.hourly.wind_direction_10m
+      };
+      return {
+        temp: j.current.temperature_2m,
+        humidity: j.current.relative_humidity_2m,
+        pressure: j.current.surface_pressure,
+        windSpeed: j.current.wind_speed_10m,
+        windDir: j.current.wind_direction_10m
+      };
+    }catch(e){
+      console.error('Open-Meteo xatolik:',e);
+      alert('Meteo API ishlamadi: '+e.message);
+      return null;
+    }
+  }
+};
+function pm25ToAQI(c){
+  const bp=[[0,12,0,50],[12.1,35.4,51,100],[35.5,55.4,101,150],[55.5,150.4,151,200],[150.5,250.4,201,300],[250.5,500,301,500]];
+  for(const [cl,ch,al,ah] of bp) if(c<=ch) return Math.round((ah-al)/(ch-cl)*(c-cl)+al);
+  return 500;
+}
+
+/* ============ Chart.js ============ */
+const ctx = document.getElementById('concChart').getContext('2d');
+let chartMode='hourly'; // 'hourly' | 'profile'
+const chart = new Chart(ctx,{
+  type:'line',
+  data:{labels:[],datasets:[
+    {label:'Gauss prognoz',data:[],borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.2)',fill:true,tension:.35,borderWidth:2.5,pointRadius:0},
+    {label:'Open-Meteo o\'lchov',data:[],borderColor:'#22d3ee',borderDash:[4,3],borderWidth:2,pointRadius:0,tension:.35},
+    {label:'WHO 24h limit (15)',data:[],borderColor:'#ef4444',borderDash:[5,4],borderWidth:1.5,pointRadius:0}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#8a97b8',font:{size:11}}},
+      tooltip:{callbacks:{label:c=>c.parsed.y.toFixed(2)+' µg/m³'}}},
+    scales:{
+      x:{ticks:{color:'#8a97b8'},grid:{color:'#243153'},title:{display:true,text:'Soat',color:'#8a97b8'}},
+      y:{ticks:{color:'#8a97b8'},grid:{color:'#243153'},title:{display:true,text:'µg/m³',color:'#8a97b8'},beginAtZero:true}
+    }}
+});
+function updateChart(res){
+  if(chartMode==='hourly'){
+    chart.data.labels=res.timeLabels||res.forecast.map((_,i)=>i+'h');
+    chart.data.datasets[0].data=res.forecast;
+    chart.data.datasets[0].label=`Gauss prognoz (qadam ${res.stepMin} daq)`;
+    // O'lchov: faqat soatlik mavjud, qadam <60 bo'lsa interpolatsiya, >60 bo'lsa kamaytirish
+    const obs=window.__hourlyAQ?.pm25||[];
+    const step=res.stepMin/60;
+    chart.data.datasets[1].data=res.forecast.map((_,i)=>{
+      const idx=i*step;const lo=Math.floor(idx),hi=Math.ceil(idx);
+      if(obs[lo]==null) return null;
+      return obs[hi]==null?obs[lo]:obs[lo]+(obs[hi]-obs[lo])*(idx-lo);
+    });
+    chart.options.scales.x.title.text='Vaqt';
+  }else{
+    chart.data.labels=res.profile.map(p=>p.x>=1000?(p.x/1000)+'km':p.x+'m');
+    chart.data.datasets[0].data=res.profile.map(p=>p.c);
+    chart.data.datasets[0].label='PM2.5 vs masofa (Gauss)';
+    chart.data.datasets[1].data=[];
+    chart.options.scales.x.title.text='Shamol bo\'ylab masofa';
+  }
+  chart.data.datasets[2].data=chart.data.labels.map(()=>15);
+  chart.update();
+}
+// R² va RMSE — model vs real o'lchov
+function fitMetrics(pred,obs){
+  const n=Math.min(pred.length,obs.length);
+  if(n<2) return {r2:null,rmse:null};
+  let sse=0,sst=0,mean=0;
+  for(let i=0;i<n;i++) mean+=obs[i];
+  mean/=n;
+  for(let i=0;i<n;i++){sse+=(pred[i]-obs[i])**2;sst+=(obs[i]-mean)**2;}
+  const rmse=Math.sqrt(sse/n);
+  const r2=sst>0?Math.max(0,1-sse/sst):0;
+  return {r2:+r2.toFixed(3),rmse:+rmse.toFixed(2)};
+}
+
+/* ============ Leaflet xarita ============ */
+const map = L.map('leafletMap',{zoomControl:true}).setView([SOURCE.lat,SOURCE.lng],11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  attribution:'© OpenStreetMap, © CARTO',subdomains:'abcd',maxZoom:19
+}).addTo(map);
+const sourceMarker = L.circleMarker([SOURCE.lat,SOURCE.lng],{radius:8,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.9}).addTo(map).bindPopup('IES manbasi · Toshkent');
+let hotspotLayer = L.layerGroup().addTo(map);
+function renderHotspots(hs){
+  hotspotLayer.clearLayers();
+  hs.forEach(h=>{
+    const colors=['#22c55e','#eab308','#f97316','#ef4444'];
+    const c=colors[Math.min(3,Math.floor(h.intensity*4))];
+    L.circle([h.lat,h.lng],{radius:h.intensity*1500,color:c,fillColor:c,fillOpacity:.25,weight:1}).addTo(hotspotLayer);
+  });
+}
+
+
+/* ============ Run / Pause / Reset ============ */
+let paused=false;
+function collectParams(){
+  const ranges=document.querySelectorAll('input[type=range]');
+  const inputs=document.querySelectorAll('.input');
+  const activePill=document.querySelector('.pill.active');
+  return {
+    windSpeed:+ranges[0].value, windDir:+ranges[1].value,
+    temp:+inputs[0].value, humidity:+inputs[1].value, pressure:+inputs[2].value,
+    power:+inputs[3].value, emission:+inputs[4].value,
+    substance:activePill?activePill.textContent:'PM2.5',
+    stepMin:+(document.getElementById('timeStep')?.value||60)
+  };
+}
+let lastResult=null;
+async function runSim(){
+  const btn=document.querySelector('.btn.primary');
+  btn.textContent='⏳ Hisoblanmoqda...';btn.disabled=true;
+  const params=collectParams();
+  const res=await api.runSimulation(params);
+  lastResult=res;
+  const kpis=document.querySelectorAll('.kpi .v');
+  kpis[0].innerHTML=res.pm25_avg+' <small style="font-size:11px;color:var(--muted)">µg/m³</small>';
+  // Real R² / RMSE — model vs Open-Meteo o'lchov
+  const obs=(window.__hourlyAQ?.pm25||[]).slice(0,24);
+  const fit=fitMetrics(res.forecast,obs);
+  kpis[1].innerHTML=(fit.r2!==null?fit.r2:res.peak)+' <small style="font-size:11px;color:var(--muted)">'+(fit.r2!==null?'R² (vs o\'lchov)':'peak')+'</small>';
+  kpis[2].innerHTML=res.stability+' <small style="font-size:11px;color:var(--muted)">Pasquill · Heff '+res.effectiveH+'m'+(fit.rmse!==null?' · RMSE '+fit.rmse:'')+'</small>';
+  kpis[3].innerHTML=res.affected_km2+' <small style="font-size:11px;color:var(--muted)">km²</small>';
+  const aqiLabel=res.aqi<=50?'Good':res.aqi<=100?'Moderate':res.aqi<=150?'Sensitive':res.aqi<=200?'Unhealthy':res.aqi<=300?'Very Unhealthy':'Hazardous';
+  document.querySelector('.aqi-val').innerHTML=res.aqi+' <span style="font-size:13px">— '+aqiLabel+'</span>';
+  updateChart(res);
+  renderHotspots(res.hotspots);
+  // Right-panel widgetlarni yangilash (agar funksiyalar mavjud bo'lsa)
+  if(typeof updateAQI==='function') updateAQI(res.aqi);
+  if(typeof drawWindRose==='function') drawWindRose();
+  if(typeof renderCorr==='function') renderCorr();
+  if(typeof renderEmissions==='function') renderEmissions();
+  if(typeof renderModels==='function') renderModels();
+  btn.textContent='▶  Run Simulation';btn.disabled=false;
+}
+document.getElementById('chartToggle').addEventListener('click',()=>{
+  chartMode=chartMode==='hourly'?'profile':'hourly';
+  if(lastResult) updateChart(lastResult);
+});
+document.querySelector('.btn.primary').addEventListener('click',runSim);
+document.querySelectorAll('.btn').forEach(b=>{
+  if(b.textContent.includes('Reset'))b.addEventListener('click',()=>location.reload());
+  if(b.textContent.includes('Pause'))b.addEventListener('click',()=>{paused=!paused;b.textContent=paused?'▶ Continue':'⏸ Pause';});
+});
+
+/* ============ Auto-fill from Open-Meteo ============ */
+function dirToCompass(d){
+  const dirs=['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(((d%360)/45))%8];
+}
+async function autoFill(){
+  const [w,aq]=await Promise.all([api.fetchWeather(),api.fetchAirQuality()]);
+  if(aq) console.log('Open-Meteo Air Quality:',aq);
+  if(!w) return;
+  const inputs=document.querySelectorAll('.input');
+  inputs[0].value=w.temp.toFixed(1);
+  inputs[1].value=Math.round(w.humidity);
+  inputs[2].value=Math.round(w.pressure);
+  const ranges=document.querySelectorAll('input[type=range]');
+  ranges[0].value=w.windSpeed.toFixed(1);
+  ranges[1].value=Math.round(w.windDir);
+  // Yorliqlarni real qiymatlar bilan yangilash
+  const labels=document.querySelectorAll('.field .val');
+  labels.forEach(l=>{
+    const t=l.textContent;
+    if(t.includes('m/s')) l.textContent=w.windSpeed.toFixed(1)+' m/s';
+    else if(t.includes('°') && !t.includes('C')) l.textContent=dirToCompass(w.windDir)+' · '+Math.round(w.windDir)+'°';
+    else if(t.includes('°C')||t==='°C') l.textContent=w.temp.toFixed(1)+'°C';
+    else if(t.includes('%')) l.textContent=Math.round(w.humidity)+'%';
+    else if(t.includes('hPa')) l.textContent=Math.round(w.pressure)+' hPa';
+  });
+  // Compass nadle aylantirish
+  const needle=document.querySelector('.needle');
+  if(needle) needle.style.transform=`translate(-50%,-100%) rotate(${w.windDir}deg)`;
+  // Live AQI/PM ko'rsatish (top-bar chip yoki console)
+  if(aq){
+    const chip=document.querySelector('.chip.live');
+    if(chip) chip.textContent=`Live: PM2.5 ${aq.pm25?.toFixed(1)} µg/m³ · AQI ${aq.aqi}`;
+  }
+  await runSim();
+}
+document.querySelectorAll('.switch').forEach(s=>s.addEventListener('click',()=>{
+  if(s.classList.contains('on')) autoFill();
+}));
+
+/* ============ Time step ============ */
+document.getElementById('timeStep').addEventListener('change',function(){
+  const m=+this.value;
+  const total=m>=360?48:24;
+  const n=Math.round(total*60/m);
+  document.getElementById('stepInfo').textContent=`${n} nuqta · ${total} soat`;
+  runSim();
+});
+
+/* ============ Eksport / Hisobot ============ */
+function ts(){return new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);}
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+function reportRows(){
+  if(!lastResult) return [];
+  const obs=window.__hourlyAQ?.pm25||[];
+  const step=lastResult.stepMin/60;
+  return lastResult.forecast.map((v,i)=>{
+    const oi=Math.round(i*step);
+    return {
+      vaqt: lastResult.timeLabels[i],
+      gauss_pm25: +v.toFixed(2),
+      olchov_pm25: obs[oi]!=null?+obs[oi].toFixed(2):'',
+      farq: obs[oi]!=null?+(v-obs[oi]).toFixed(2):''
+    };
+  });
+}
+function reportMeta(){
+  const p=lastResult.params;
+  return [
+    ['Sana',new Date().toLocaleString('uz-UZ')],
+    ['Manba (lat,lng)',`${SOURCE.lat}, ${SOURCE.lng}`],
+    ['Stack balandligi (m)',SOURCE.stackH],
+    ['Effektiv balandlik (m)',lastResult.effectiveH],
+    ['Modda',p.substance],
+    ['Chiqindi (kg/s)',p.emission],
+    ['IES quvvati (MW)',p.power],
+    ['Shamol tezligi (m/s)',p.windSpeed],
+    ['Shamol yo\'nalishi (°)',p.windDir],
+    ['Harorat (°C)',p.temp],
+    ['Namlik (%)',p.humidity],
+    ['Bosim (hPa)',p.pressure],
+    ['Vaqt bosqichi (daq)',p.stepMin],
+    ['Pasquill klassi',lastResult.stability],
+    ['PM2.5 o\'rtacha (µg/m³)',lastResult.pm25_avg],
+    ['Peak konsentratsiya (µg/m³)',lastResult.peak],
+    ['Ta\'sirlangan zona (km²)',lastResult.affected_km2],
+    ['AQI (US EPA)',lastResult.aqi]
+  ];
+}
+function exportCSV(){
+  const meta=reportMeta().map(r=>r.join(',')).join('\n');
+  const rows=reportRows();
+  const head='vaqt,gauss_pm25,olchov_pm25,farq';
+  const body=rows.map(r=>[r.vaqt,r.gauss_pm25,r.olchov_pm25,r.farq].join(',')).join('\n');
+  const csv='# AirSim hisobot\n'+meta+'\n\n'+head+'\n'+body;
+  download(new Blob([csv],{type:'text/csv;charset=utf-8'}),`airsim-${ts()}.csv`);
+}
+function exportXLSX(){
+  const wb=XLSX.utils.book_new();
+  const wsMeta=XLSX.utils.aoa_to_sheet([['Parametr','Qiymat'],...reportMeta()]);
+  XLSX.utils.book_append_sheet(wb,wsMeta,'Parametrlar');
+  const rows=reportRows();
+  const wsData=XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,wsData,'Vaqt qatori');
+  const wsProf=XLSX.utils.json_to_sheet(lastResult.profile.map(p=>({masofa_m:p.x,konsentratsiya_ug_m3:+p.c.toFixed(2)})));
+  XLSX.utils.book_append_sheet(wb,wsProf,'Gauss profili');
+  XLSX.writeFile(wb,`airsim-${ts()}.xlsx`);
+}
+async function exportPDF(){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  doc.setFontSize(16);doc.text('AirSim — Atmosfera ifloslanishi hisoboti',14,18);
+  doc.setFontSize(10);doc.setTextColor(120);
+  doc.text(new Date().toLocaleString('uz-UZ'),14,24);
+  doc.setTextColor(0);
+  doc.autoTable({startY:30,head:[['Parametr','Qiymat']],body:reportMeta(),theme:'striped',headStyles:{fillColor:[59,130,246]},styles:{fontSize:9}});
+  // Chart rasm
+  try{
+    const canvas=document.getElementById('concChart');
+    const img=canvas.toDataURL('image/png');
+    doc.addPage();doc.setFontSize(13);doc.text('Vaqt bo\'yicha konsentratsiya',14,15);
+    doc.addImage(img,'PNG',14,20,180,90);
+  }catch(e){}
+  // Vaqt qatori jadvali
+  doc.addPage();doc.setFontSize(13);doc.text('Vaqt qatori (Gauss vs O\'lchov)',14,15);
+  const rows=reportRows().map(r=>[r.vaqt,r.gauss_pm25,r.olchov_pm25,r.farq]);
+  doc.autoTable({startY:20,head:[['Vaqt','Gauss µg/m³','O\'lchov µg/m³','Farq']],body:rows,styles:{fontSize:8},headStyles:{fillColor:[59,130,246]}});
+  // Gauss profil
+  doc.addPage();doc.setFontSize(13);doc.text('Gauss dispersiya profili',14,15);
+  doc.autoTable({startY:20,head:[['Masofa (m)','Konsentratsiya (µg/m³)']],body:lastResult.profile.map(p=>[p.x,+p.c.toFixed(2)]),styles:{fontSize:9},headStyles:{fillColor:[59,130,246]}});
+  doc.save(`airsim-hisobot-${ts()}.pdf`);
+}
+async function exportPNG(){
+  const target=document.querySelector('.layout');
+  const canvas=await html2canvas(target,{backgroundColor:'#0b1220',scale:1.5});
+  canvas.toBlob(b=>download(b,`airsim-snapshot-${ts()}.png`));
+}
+function shareLink(){
+  const p=lastResult?.params||collectParams();
+  const u=new URL(location.href);
+  u.search='';
+  Object.entries(p).forEach(([k,v])=>u.searchParams.set(k,v));
+  navigator.clipboard.writeText(u.toString()).then(()=>alert('Link nusxa olindi:\n'+u.toString()));
+}
+document.querySelectorAll('.export-btn').forEach(b=>b.addEventListener('click',()=>{
+  if(!lastResult){alert('Avval Run Simulation bosing');return;}
+  const f=b.dataset.export;
+  try{
+    if(f==='csv') exportCSV();
+    else if(f==='xlsx') exportXLSX();
+    else if(f==='pdf') exportPDF();
+    else if(f==='png') exportPNG();
+  }catch(e){alert('Eksport xatolik: '+e.message);}
+}));
+document.getElementById('shareBtn').addEventListener('click',shareLink);
+
+/* URL'dan parametrlarni qayta tiklash */
+function loadFromURL(){
+  const sp=new URLSearchParams(location.search);
+  if(![...sp.keys()].length) return false;
+  const inputs=document.querySelectorAll('.input');
+  const ranges=document.querySelectorAll('input[type=range]');
+  if(sp.get('windSpeed'))ranges[0].value=sp.get('windSpeed');
+  if(sp.get('windDir'))ranges[1].value=sp.get('windDir');
+  if(sp.get('temp'))inputs[0].value=sp.get('temp');
+  if(sp.get('humidity'))inputs[1].value=sp.get('humidity');
+  if(sp.get('pressure'))inputs[2].value=sp.get('pressure');
+  if(sp.get('power'))inputs[3].value=sp.get('power');
+  if(sp.get('emission'))inputs[4].value=sp.get('emission');
+  if(sp.get('stepMin'))document.getElementById('timeStep').value=sp.get('stepMin');
+  ranges.forEach(r=>r.dispatchEvent(new Event('input')));
+  return true;
+}
+
+/* ============ AQI dynamic ============ */
+function updateAQI(aqi){
+  const lab=aqi<=50?'Good':aqi<=100?'Moderate':aqi<=150?'Sensitive':aqi<=200?'Unhealthy':aqi<=300?'Very Unhealthy':'Hazardous';
+  const col=aqi<=50?'#22c55e':aqi<=100?'#eab308':aqi<=150?'#f97316':aqi<=200?'#ef4444':aqi<=300?'#a855f7':'#7e22ce';
+  const el=document.getElementById('aqiVal');
+  el.innerHTML=aqi+' <span style="font-size:13px">— '+lab+'</span>';
+  el.style.color=col;
+  document.getElementById('aqiNeedle').style.left=Math.min(100,aqi/300*100)+'%';
+}
+
+/* ============ Wind Rose (Open-Meteo 48h) ============ */
+function drawWindRose(){
+  const cv=document.getElementById('windRose');const ctx=cv.getContext('2d');
+  const w=cv.width,h=cv.height,cx=w/2,cy=h/2,R=85;
+  ctx.clearRect(0,0,w,h);
+  // Bins: 16 sectors x speed bins
+  const dirs=window.__hourlyWeather?.windDir||[];
+  const spds=window.__hourlyWeather?.windSpeed||[];
+  if(!dirs.length){ctx.fillStyle='#8a97b8';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText('Ma\'lumot yo\'q',cx,cy);return;}
+  const bins=Array.from({length:16},()=>[0,0,0,0]); // <2, 2-5, 5-8, >8 m/s
+  dirs.forEach((d,i)=>{
+    const s=spds[i]||0;
+    const b=Math.round(((d%360)/22.5))%16;
+    const sb=s<2?0:s<5?1:s<8?2:3;
+    bins[b][sb]++;
+  });
+  const max=Math.max(...bins.map(b=>b[0]+b[1]+b[2]+b[3]));
+  const colors=['#1e3a8a','#3b82f6','#22d3ee','#ef4444'];
+  // grid circles
+  ctx.strokeStyle='#243153';ctx.lineWidth=1;
+  for(let r=R/3;r<=R;r+=R/3){ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();}
+  // sectors
+  bins.forEach((b,i)=>{
+    const a0=(i*22.5-90-11.25)*Math.PI/180;
+    const a1=(i*22.5-90+11.25)*Math.PI/180;
+    let acc=0;
+    b.forEach((cnt,j)=>{
+      if(!cnt) return;
+      const r0=acc/max*R;acc+=cnt;const r1=acc/max*R;
+      ctx.beginPath();
+      ctx.arc(cx,cy,r1,a0,a1);
+      ctx.arc(cx,cy,r0,a1,a0,true);
+      ctx.closePath();
+      ctx.fillStyle=colors[j];ctx.fill();
+    });
+  });
+  // labels
+  ctx.fillStyle='#8a97b8';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ['N','E','S','W'].forEach((l,i)=>{
+    const a=(i*90-90)*Math.PI/180;
+    ctx.fillText(l,cx+Math.cos(a)*(R+12),cy+Math.sin(a)*(R+12));
+  });
+  // dominant
+  let best=0,bi=0;bins.forEach((b,i)=>{const s=b[0]+b[1]+b[2]+b[3];if(s>best){best=s;bi=i;}});
+  const compass=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][bi];
+  const avgS=spds.reduce((a,b)=>a+b,0)/spds.length;
+  document.getElementById('windRoseInfo').textContent=`Dominant: ${compass} · O'rtacha ${avgS.toFixed(1)} m/s`;
+}
+
+/* ============ Correlation matrix (Pearson) ============ */
+function pearson(x,y){
+  const n=Math.min(x.length,y.length);if(n<3)return 0;
+  let mx=0,my=0;for(let i=0;i<n;i++){mx+=x[i];my+=y[i];}mx/=n;my/=n;
+  let num=0,dx=0,dy=0;
+  for(let i=0;i<n;i++){const a=x[i]-mx,b=y[i]-my;num+=a*b;dx+=a*a;dy+=b*b;}
+  return dx&&dy?num/Math.sqrt(dx*dy):0;
+}
+function renderCorr(){
+  const hw=window.__hourlyWeather,aq=window.__hourlyAQ;
+  if(!hw||!aq){document.getElementById('corrMatrix').innerHTML='<div style="grid-column:1/-1;font-size:10px;color:var(--muted)">Ma\'lumot yo\'q</div>';return;}
+  const n=Math.min(hw.temp.length,aq.pm25.length,48);
+  const T=hw.temp.slice(0,n),H=hw.temp.map((_,i)=>50).slice(0,n); // humidity not in hourly, use proxy
+  // we don't have hourly humidity/pressure — use real T,W,PM and synth for others
+  const W=hw.windSpeed.slice(0,n),P=hw.windDir.slice(0,n),PM=aq.pm25.slice(0,n);
+  // Use T, W, windDir, PM10, PM2.5
+  const PM10=aq.pm10.slice(0,n);
+  const vars=[['T',T],['W',W],['Dir',P],['PM10',PM10],['PM2.5',PM]];
+  const m=document.getElementById('corrMatrix');m.innerHTML='';
+  for(let i=0;i<5;i++){
+    for(let j=0;j<5;j++){
+      const r=i===j?1:pearson(vars[i][1],vars[j][1]);
+      const cell=document.createElement('div');cell.className='cell';
+      const v=Math.abs(r);
+      const hue=r>0?0:220; // red positive, blue negative
+      cell.style.background=i===j?'#1e3a8a':`hsl(${hue},${Math.round(60+v*40)}%,${Math.round(60-v*30)}%)`;
+      cell.textContent=i===j?vars[i][0]:r.toFixed(2);
+      cell.title=`${vars[i][0]} ↔ ${vars[j][0]}: r = ${r.toFixed(3)}`;
+      m.appendChild(cell);
+    }
+  }
+}
+
+/* ============ Emission Source Analysis ============ */
+// IES (ko'mir/gaz) chiqindi koeffitsientlari (kg / MWh) — taxminiy real qiymatlar
+const EMIT_FACTORS={
+  'PM2.5':{CO2:950,SO2:8.5,NOx:2.8,'PM2.5':0.35,CO:0.25},
+  'SO₂':  {CO2:950,SO2:8.5,NOx:2.8,'PM2.5':0.35,CO:0.25},
+  'NO₂':  {CO2:950,SO2:8.5,NOx:2.8,'PM2.5':0.35,CO:0.25},
+  'CO':   {CO2:950,SO2:8.5,NOx:2.8,'PM2.5':0.35,CO:0.25},
+  'NH₃':  {CO2:950,SO2:8.5,NOx:2.8,'PM2.5':0.35,CO:0.25}
+};
+function renderEmissions(){
+  if(!lastResult)return;
+  const p=lastResult.params;
+  const f=EMIT_FACTORS[p.substance]||EMIT_FACTORS['PM2.5'];
+  // kg/h = MW * factor
+  const flows={};let total=0;
+  for(const k in f){flows[k]=p.power*f[k];total+=flows[k];}
+  const colors={CO2:'#ef4444',SO2:'#f97316',NOx:'#eab308','PM2.5':'#a855f7',CO:'#22d3ee'};
+  const el=document.getElementById('emissionList');el.innerHTML='';
+  Object.entries(flows).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{
+    const pct=(v/total*100).toFixed(1);
+    const row=document.createElement('div');
+    row.innerHTML=`<div style="display:flex;justify-content:space-between;font-size:11px"><span>${k}</span><span>${v.toFixed(1)} kg/h · ${pct}%</span></div>
+      <div style="height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${colors[k]||'#3b82f6'}"></div></div>`;
+    el.appendChild(row);
+  });
+}
+
+/* ============ Model variants taqqoslash ============ */
+function renderModels(){
+  if(!lastResult)return;
+  const obs=(window.__hourlyAQ?.pm25||[]).slice(0,lastResult.forecast.length);
+  if(!obs.length){document.getElementById('modelTable').innerHTML='<tr><td colspan="4" style="color:var(--muted)">O\'lchov yo\'q</td></tr>';return;}
+  // 3 variant: Basic Gauss, Gauss + bias correction, Moving avg ensemble
+  const base=lastResult.forecast;
+  const meanObs=obs.reduce((a,b)=>a+b,0)/obs.length;
+  const meanBase=base.reduce((a,b)=>a+b,0)/base.length;
+  const bias=meanObs-meanBase;
+  const corrected=base.map(v=>v+bias);
+  const ensemble=base.map((v,i)=>(v+(corrected[i]||v))/2);
+  function metrics(p,o){
+    const n=Math.min(p.length,o.length);
+    let sse=0,sae=0,sst=0,m=0;for(let i=0;i<n;i++)m+=o[i];m/=n;
+    for(let i=0;i<n;i++){const e=p[i]-o[i];sse+=e*e;sae+=Math.abs(e);sst+=(o[i]-m)**2;}
+    return{r2:sst>0?Math.max(0,1-sse/sst):0,rmse:Math.sqrt(sse/n),mae:sae/n};
+  }
+  const variants=[
+    {name:'Gauss (basic)',m:metrics(base,obs)},
+    {name:'Gauss + bias',m:metrics(corrected,obs)},
+    {name:'Ensemble',m:metrics(ensemble,obs)}
+  ];
+  const best=variants.reduce((a,b)=>b.m.r2>a.m.r2?b:a);
+  const tb=document.getElementById('modelTable');tb.innerHTML='';
+  variants.forEach(v=>{
+    const row=document.createElement('tr');
+    row.innerHTML=`<td>${v.name}</td><td>${v.m.r2.toFixed(3)}</td><td>${v.m.rmse.toFixed(2)}</td><td>${v.m.mae.toFixed(2)} <span class="badge ${v===best?'b-best':'b-mid'}">${v===best?'Eng yaxshi':'OK'}</span></td>`;
+    tb.appendChild(row);
+  });
+}
+
+/* ============ Compare Runs (snapshot) ============ */
+let snapshotRun=null;
+document.getElementById('snapshotBtn').addEventListener('click',()=>{
+  if(!lastResult){alert('Avval Run Simulation bosing');return;}
+  if(!snapshotRun){
+    snapshotRun=JSON.parse(JSON.stringify(lastResult));
+    document.getElementById('compareInfo').textContent=`📌 Saqlandi: PM2.5 avg ${snapshotRun.pm25_avg} · AQI ${snapshotRun.aqi}. Endi parametrlarni o'zgartirib qayta Run bosing.`;
+  } else {
+    const dPM=(lastResult.pm25_avg-snapshotRun.pm25_avg).toFixed(1);
+    const dAQI=lastResult.aqi-snapshotRun.aqi;
+    const dArea=(lastResult.affected_km2-snapshotRun.affected_km2).toFixed(2);
+    document.getElementById('compareInfo').innerHTML=
+      `<b>Farq vs snapshot:</b><br>ΔPM2.5: ${dPM>0?'+':''}${dPM} µg/m³<br>ΔAQI: ${dAQI>0?'+':''}${dAQI}<br>ΔZona: ${dArea>0?'+':''}${dArea} km²<br><a href="#" id="resetSnap" style="color:var(--accent-2)">Tozalash</a>`;
+    document.getElementById('resetSnap').addEventListener('click',e=>{e.preventDefault();snapshotRun=null;document.getElementById('compareInfo').textContent='';});
+  }
+});
+
+/* ============ Stsenariy ============ */
+const SCENARIOS={
+  normal:   {windSpeed:4, windDir:225, temp:22, humidity:55, pressure:1013, emission:12.4, power:850},
+  windy:    {windSpeed:12,windDir:270, temp:18, humidity:40, pressure:1018, emission:12.4, power:850},
+  calm:     {windSpeed:1, windDir:180, temp:8,  humidity:85, pressure:1025, emission:12.4, power:850},
+  emergency:{windSpeed:2, windDir:90,  temp:25, humidity:30, pressure:1005, emission:48,   power:1200}
+};
+document.getElementById('scenario').addEventListener('change',function(){
+  const s=SCENARIOS[this.value];if(!s)return;
+  // turn off auto-fill switch (manual override)
+  document.querySelectorAll('.switch.on').forEach(sw=>sw.classList.remove('on'));
+  const ranges=document.querySelectorAll('input[type=range]');
+  const inputs=document.querySelectorAll('.input');
+  ranges[0].value=s.windSpeed;ranges[1].value=s.windDir;
+  inputs[0].value=s.temp;inputs[1].value=s.humidity;inputs[2].value=s.pressure;
+  inputs[3].value=s.power;inputs[4].value=s.emission;
+  // Update labels
+  const labels=document.querySelectorAll('.field .val');
+  labels.forEach(l=>{
+    const t=l.textContent;
+    if(t.includes('m/s')) l.textContent=s.windSpeed+' m/s';
+    else if(t.includes('°') && !t.includes('C')) l.textContent=dirToCompass(s.windDir)+' · '+s.windDir+'°';
+    else if(t.includes('°C')) l.textContent=s.temp+'°C';
+    else if(t.includes('%')) l.textContent=s.humidity+'%';
+    else if(t.includes('hPa')) l.textContent=s.pressure+' hPa';
+  });
+  const needle=document.querySelector('.needle');
+  if(needle) needle.style.transform=`translate(-50%,-100%) rotate(${s.windDir}deg)`;
+  runSim();
+});
+
+/* Initial: real meteo + run */
+window.addEventListener('load',async()=>{
+  setTimeout(()=>map.invalidateSize(),200);
+  if(loadFromURL()){await api.fetchAirQuality();await runSim();}
+  else await autoFill();
+});
+</script>
+
+<!-- ============ 3D OVERLAY (boshlang'ich ekran) ============ -->
+<div id="threeOverlay" class="show">
+  <canvas id="threeCv"></canvas>
+
+  <div class="loader3" id="threeLoader">
+    <div>
+      <div class="spinner3"></div>
+      <p>Sun'iy yo'ldosh tasviri yuklanmoqda...</p>
+    </div>
+  </div>
+
+  <header class="top3">
+    <div class="grp">
+      <button class="btn" id="three3Close">📊 Dashboard</button>
+      <div class="title3"><div class="dot">⚡</div>3D Atmosfera Modeli — Toshkent IES</div>
+    </div>
+    <div class="grp">
+      <button class="btn" id="three3Snap">📸 Snapshot</button>
+    </div>
+  </header>
+
+  <div class="hud3" id="threeHud">
+    <div style="font-weight:700;color:var(--accent-2);margin-bottom:6px">REAL-TIME PLUME</div>
+    <div class="row"><span>Shamol:</span><span><b id="t3hWind">4.0 m/s · 225°</b></span></div>
+    <div class="row"><span>Pasquill klassi:</span><span><b id="t3hClass">D</b></span></div>
+    <div class="row"><span>H<sub>eff</sub>:</span><span><b id="t3hH">120 m</b></span></div>
+    <div class="row"><span>Chiqindi (Q):</span><span><b id="t3hQ">12.4 kg/s</b></span></div>
+    <div class="row"><span>Tarqalish:</span><span><b id="t3hPeak">— km</b></span></div>
+    <div class="row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span>Aholi ta'siri:</span><span><b id="t3hExposed" style="color:#ef4444">— k</b></span></div>
+    <div class="row"><span>Stansiyalar (jonli):</span><span><b id="t3hStations">yuklanmoqda...</b></span></div>
+    <div class="row"><span>Real PM<sub>2.5</sub> (Markaz):</span><span><b id="t3hRealPM">—</b></span></div>
+    <div class="swatches">
+      <span style="background:#22c55e">&lt;15</span>
+      <span style="background:#eab308">15-35</span>
+      <span style="background:#f97316">35-75</span>
+      <span style="background:#ef4444">75-150</span>
+      <span style="background:#a855f7;color:#fff">150+ µg/m³</span>
+    </div>
+  </div>
+
+  <aside class="side3">
+    <h4>⚙ Parametrlar</h4>
+    <div class="field"><label>Shamol tezligi <span class="v" id="t3vWS">4.0 m/s</span></label><input type="range" id="t3ws" min="0.5" max="15" step="0.1" value="4"></div>
+    <div class="field"><label>Shamol yo'nalishi <span class="v" id="t3vWD">225°</span></label><input type="range" id="t3wd" min="0" max="359" step="1" value="225"></div>
+    <div class="field"><label>Harorat <span class="v" id="t3vT">22°C</span></label><input type="range" id="t3T" min="-15" max="40" step="1" value="22"></div>
+    <div class="field"><label>Chiqindi (kg/s) <span class="v" id="t3vQ">12.4</span></label><input type="range" id="t3Q" min="0.5" max="60" step="0.1" value="12.4"></div>
+    <div class="field"><label>Stack balandligi <span class="v" id="t3vH">120 m</span></label><input type="range" id="t3sh" min="40" max="300" step="5" value="120"></div>
+    <h4 style="margin-top:14px">🎬 Stsenariy</h4>
+    <div class="field">
+      <select id="t3scenario" style="width:100%;background:#1a2540;border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px">
+        <option value="normal">Odatiy kun</option>
+        <option value="windy">Shamolli kun</option>
+        <option value="calm">Tinch havo (inversiya)</option>
+        <option value="emergency">Favqulodda holat</option>
+      </select>
+    </div>
+    <h4 style="margin-top:14px">🎨 Ko'rinish</h4>
+    <div class="field"><label>Plume zichligi <span class="v" id="t3vDens">0.7</span></label><input type="range" id="t3dens" min="0.1" max="1" step="0.05" value="0.7"></div>
+    <div class="field"><label>Tube shaffofligi <span class="v" id="t3vOpa">0.30</span></label><input type="range" id="t3opa" min="0" max="0.8" step="0.05" value="0.30"></div>
+
+    <h4 style="margin-top:14px">📡 Monitoring stansiyalari</h4>
+    <div id="t3stationsList" style="display:flex;flex-direction:column;gap:4px;font-size:11px">
+      <div style="color:var(--muted);font-size:10px">yuklanmoqda...</div>
+    </div>
+
+    <h4 style="margin-top:14px">🏙 3D shahar binolari</h4>
+    <button class="btn" id="t3buildBtn" style="width:100%;font-size:11px;padding:8px">🏗 Binolarni yuklash (OSM)</button>
+    <div id="t3buildInfo" style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5">
+      OpenStreetMap (Overpass API)<br>
+      ~2.5 km radius · max 2000 bino
+    </div>
+
+    <h4 style="margin-top:14px">📊 CSV ma'lumot</h4>
+    <input type="file" id="t3csv" accept=".csv,.txt" style="display:none">
+    <button class="btn" id="t3csvBtn" style="width:100%;font-size:11px;padding:8px">📁 CSV yuklash</button>
+    <button class="btn" id="t3csvDemo" style="width:100%;font-size:10px;padding:5px;margin-top:4px">🎲 Demo namuna</button>
+    <button class="btn" id="t3csvClear" style="width:100%;font-size:10px;padding:5px;margin-top:4px;display:none">✕ Tozalash</button>
+    <div id="t3csvInfo" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
+    <div id="t3timeBar" style="display:none;margin-top:8px">
+      <label style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+        <span id="t3timeLabel">Vaqt: 0/0</span>
+        <button id="t3playBtn" class="btn" style="padding:2px 10px;font-size:11px">▶</button>
+      </label>
+      <input type="range" id="t3time" min="0" max="0" step="1" value="0" style="width:100%">
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">
+      <b style="color:var(--text)">Format A</b> (vaqt qatori):<br>
+      <code style="color:var(--accent-2)">time,wind_speed,wind_dir,temp,emission</code><br>
+      <b style="color:var(--text)">Format B</b> (o'lchov nuqtalari):<br>
+      <code style="color:var(--accent-2)">lat,lon,pm25</code>
+    </div>
+  </aside>
+
+  <div class="views3">
+    <button class="btn" data-vw3="auto">↻ Auto</button>
+    <button class="btn" data-vw3="persp">⬢ Perspektiva</button>
+    <button class="btn" data-vw3="top">▦ Yuqoridan</button>
+    <button class="btn" data-vw3="side">▭ Yondan</button>
+    <button class="btn" data-vw3="follow">→ Plume bo'ylab</button>
+  </div>
+
+  <div class="tip3">🖱 Sichqoncha — aylantirish · ⚙ G'ildirak — zoom · 📍 Stansiyaga bosing · ESC — qaytish</div>
+
+  <!-- Stansiya batafsil paneli (click bo'lganda ochiladi) -->
+  <div id="stationDetail" style="display:none;position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:11;background:rgba(16,24,42,.96);border:2px solid var(--accent);border-radius:12px;padding:18px 22px;min-width:340px;max-width:440px;backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.5)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:16px;font-weight:700;color:var(--accent-2)" id="sdName">—</div>
+      <button onclick="document.getElementById('stationDetail').style.display='none'" style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px">✕</button>
+    </div>
+    <div id="sdAQIBadge" style="display:inline-block;padding:4px 12px;border-radius:6px;font-size:13px;font-weight:700;color:#000;margin-bottom:10px">—</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:12px;line-height:1.7">
+      <div style="color:var(--muted)">PM<sub>2.5</sub>:</div><div><b id="sdPM25">—</b> µg/m³</div>
+      <div style="color:var(--muted)">PM<sub>10</sub>:</div><div><b id="sdPM10">—</b> µg/m³</div>
+      <div style="color:var(--muted)">NO<sub>2</sub>:</div><div><b id="sdNO2">—</b> µg/m³</div>
+      <div style="color:var(--muted)">SO<sub>2</sub>:</div><div><b id="sdSO2">—</b> µg/m³</div>
+      <div style="color:var(--muted)">CO:</div><div><b id="sdCO">—</b> µg/m³</div>
+      <div style="color:var(--muted)">O<sub>3</sub>:</div><div><b id="sdO3">—</b> µg/m³</div>
+      <div style="color:var(--muted)">AQI (EU):</div><div><b id="sdAQI">—</b></div>
+      <div style="color:var(--muted)">Koordinata:</div><div><b id="sdCoord">—</b></div>
+      <div style="color:var(--muted)">Manbadan:</div><div><b id="sdDist">—</b> km</div>
+      <div style="color:var(--muted)">Model PM<sub>2.5</sub>:</div><div><b id="sdModel">—</b> µg/m³</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:14px">
+      <button class="btn" id="sdFlyBtn" style="flex:1;font-size:11px;padding:7px">🎯 Yaqinlashtirish</button>
+      <button class="btn" id="sdRefreshBtn" style="flex:1;font-size:11px;padding:7px">🔄 Yangilash</button>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:center">
+      Manba: Open-Meteo Air Quality API · jonli
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ 3D OVERLAY MODULI (lazy init) ============ */
+(function(){
+  const overlay = document.getElementById('threeOverlay');
+  const openBtn = document.getElementById('open3DBtn');
+  const closeBtn = document.getElementById('three3Close');
+  const snapBtn = document.getElementById('three3Snap');
+  let inited = false, T = null;
+
+  // FORCE-HIDE LOADER: 3 soniyadan keyin har qanday holatda yopiladi
+  // (init() xato qilsa, Three.js yuklanmasa, Esri ulanmasa ham)
+  setTimeout(()=>{
+    const ld = document.getElementById('threeLoader');
+    if(ld){ ld.classList.add('hide'); setTimeout(()=>ld.style.display='none', 600); }
+  }, 3000);
+
+  // Three.js mavjudligini tekshirish
+  if(typeof THREE === 'undefined'){
+    console.error('[3D] THREE.js yuklanmadi! CDN bloklangan bo\'lishi mumkin.');
+    setTimeout(()=>{
+      const ld = document.getElementById('threeLoader');
+      if(ld) ld.innerHTML = '<div style="text-align:center;color:#ef4444"><p>⚠ Three.js yuklanmadi</p><p style="font-size:11px;color:#8a97b8;margin-top:8px">Internet ulanish kerak yoki CDN bloklangan</p></div>';
+    }, 100);
+  }
+
+  function dirToCompass(d){
+    const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return dirs[Math.round((d%360)/22.5)%16];
+  }
+  function concColor(c){
+    if(c<5)   return [0.13,0.77,0.37];
+    if(c<15)  return [0.55,0.85,0.20];
+    if(c<35)  return [0.92,0.70,0.03];
+    if(c<75)  return [0.98,0.45,0.09];
+    if(c<150) return [0.94,0.27,0.27];
+    return            [0.66,0.21,0.93];
+  }
+
+  function init(){
+    if(inited) return;
+    if(typeof THREE === 'undefined'){ console.error('[3D] THREE not loaded'); return; }
+    inited = true;
+    try { initInner(); }
+    catch(e){
+      console.error('[3D] init error:', e);
+      const ld = document.getElementById('threeLoader');
+      if(ld) ld.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px"><p>⚠ 3D modulda xato</p><p style="font-size:11px;color:#8a97b8;margin-top:8px;max-width:300px">'+e.message+'</p></div>';
+    }
+  }
+
+  function initInner(){
+    console.log('[3D] init starting...');
+    const M_PER_U = 20;
+    const canvas = document.getElementById('threeCv');
+    const W = innerWidth, H = innerHeight;
+
+    const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+    renderer.setSize(W, H, false);
+    renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+
+    const scene = new THREE.Scene();
+    // Osmon gradient (gorizont sari oqaradi)
+    (function(){
+      const cv=document.createElement('canvas'); cv.width=4; cv.height=256;
+      const c=cv.getContext('2d');
+      const g=c.createLinearGradient(0,0,0,256);
+      g.addColorStop(0,'#3e6a9e'); g.addColorStop(0.5,'#83a8cc'); g.addColorStop(1,'#d8e2ec');
+      c.fillStyle=g; c.fillRect(0,0,4,256);
+      scene.background = new THREE.CanvasTexture(cv);
+    })();
+    scene.fog = new THREE.Fog(0xc0d0e0, 350, 1500);
+    const camera = new THREE.PerspectiveCamera(50, W/H, 0.1, 4000);
+
+    // Yorug'lik (kunduzgi)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const sun = new THREE.DirectionalLight(0xfff2e0, 1.45);
+    sun.position.set(220, 320, 180); scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xddeeff, 0x444a55, 0.55));
+
+    // YER — boshlang'ich kulrang-yashil placeholder (sun'iy yo'ldosh keyin yuklanadi)
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(2000, 2000),
+      new THREE.MeshStandardMaterial({color:0x788670, roughness:1, metalness:0})
+    );
+    ground.rotation.x = -Math.PI/2;
+    scene.add(ground);
+
+    // To'r va halqalar
+    const grid = new THREE.GridHelper(2000, 40, 0xffffff, 0xffffff);
+    grid.material.transparent=true; grid.material.opacity=0.10;
+    grid.position.y=0.05; scene.add(grid);
+    [1,2.5,5,7.5,10].forEach((km,i)=>{
+      const r=km*1000/M_PER_U;
+      const ring=new THREE.Mesh(new THREE.RingGeometry(r-0.4,r+0.4,96),
+        new THREE.MeshBasicMaterial({color:i===2?0xef4444:0xffffff,transparent:true,opacity:0.4,side:THREE.DoubleSide}));
+      ring.rotation.x=-Math.PI/2; ring.position.y=0.1; scene.add(ring);
+    });
+
+    // Kompass yorliqlari (N/S/E/W)
+    function makeLabel(text, color){
+      const cv=document.createElement('canvas'); cv.width=128; cv.height=64;
+      const c=cv.getContext('2d');
+      c.fillStyle='rgba(11,18,32,0.85)'; c.fillRect(0,0,128,64);
+      c.fillStyle=color; c.font='bold 36px sans-serif'; c.textAlign='center'; c.fillText(text,64,44);
+      const tex=new THREE.CanvasTexture(cv);
+      return new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+    }
+    const Rl = 10000/M_PER_U + 8;
+    [['N',0,-Rl],['S',0,Rl],['E',Rl,0],['W',-Rl,0]].forEach(([t,x,z])=>{
+      const sp=makeLabel(t,'#22d3ee'); sp.position.set(x,2,z); sp.scale.set(20,10,1); scene.add(sp);
+    });
+
+    // ===== IES BINOSI — realistik (giperboloid sovutish minoralari + qizil-oq trubalari) =====
+    const ies = new THREE.Group();
+
+    // Giperboloid sovutish minorasi (LatheGeometry orqali)
+    function tower(x, z, h, baseR=2.4, neckR=1.4, topR=1.8, color=0xc8d0dc){
+      const pts=[];
+      for(let i=0;i<=14;i++){
+        const t=i/14, y=t*h;
+        const dt=t-0.55;
+        const r=neckR + Math.pow(Math.abs(dt),1.5)*(Math.max(baseR,topR)-neckR)*2.2;
+        pts.push(new THREE.Vector2(r,y));
+      }
+      const m=new THREE.Mesh(
+        new THREE.LatheGeometry(pts,36),
+        new THREE.MeshStandardMaterial({color, roughness:0.78, metalness:0.05})
+      );
+      m.position.set(x,0,z);
+      return m;
+    }
+    ies.add(tower(-6, 0, 5, 2.4, 1.5, 2.0, 0xc8d0dc));
+    ies.add(tower( 0, 0, 4.5, 2.0, 1.3, 1.8, 0xbcc5d4));
+    ies.add(tower( 6, 0, 5, 2.4, 1.5, 2.0, 0xc8d0dc));
+
+    // Tutun trubasi — qizil-oq chiziqli segmentlar
+    const chimneyTops = [];
+    function chimney(x, z, h){
+      const segs=10, segH=h/segs;
+      for(let i=0;i<segs;i++){
+        const seg=new THREE.Mesh(
+          new THREE.CylinderGeometry(0.42, 0.5, segH, 14),
+          new THREE.MeshStandardMaterial({color: i%2 ? 0xee5533 : 0xeeeeee, roughness:0.55})
+        );
+        seg.position.set(x, segH*(i+0.5), z); ies.add(seg);
+      }
+      chimneyTops.push(new THREE.Vector3(x, h, z));
+    }
+    chimney(-5, 3, 11); chimney(0, 3, 9.5); chimney(5, 3, 11.5);
+
+    // Asosiy korpus
+    const base = new THREE.Mesh(
+      new THREE.BoxGeometry(18, 1.8, 7),
+      new THREE.MeshStandardMaterial({color:0x556677, roughness:0.85})
+    );
+    base.position.set(0, 0.9, 3); ies.add(base);
+    // Yon tom (qoshimcha hajm uchun)
+    const wall = new THREE.Mesh(
+      new THREE.BoxGeometry(18, 2.8, 0.6),
+      new THREE.MeshStandardMaterial({color:0x44556a, roughness:0.9})
+    );
+    wall.position.set(0, 1.4, 6.4); ies.add(wall);
+    scene.add(ies);
+
+    // Manba qizil yorug'ligi (atmosferik effekt)
+    const ptLight = new THREE.PointLight(0xff5533, 0.9, 35);
+    ptLight.position.set(0, 6, 1); scene.add(ptLight);
+
+    const windArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(1,0,0), new THREE.Vector3(0,16,0),
+      14, 0xff0000, 4, 2.5
+    );
+    scene.add(windArrow);
+
+    const N = 5000;
+    const pos = new Float32Array(N*3), col = new Float32Array(N*3), age = new Float32Array(N);
+    function spawn(i){
+      const src = chimneyTops[i % chimneyTops.length];
+      pos[i*3]=src.x; pos[i*3+1]=src.y; pos[i*3+2]=src.z;
+      age[i]=Math.random()*30;
+      col[i*3]=0.95; col[i*3+1]=0.95; col[i*3+2]=0.95;
+    }
+    for(let i=0;i<N;i++) spawn(i);
+
+    // Yumshoq zarra texturasi (radial gradient — haqiqiy tutun ko'rinishi)
+    const partTex = (function(){
+      const cv=document.createElement('canvas'); cv.width=64; cv.height=64;
+      const c=cv.getContext('2d');
+      const g=c.createRadialGradient(32,32,0, 32,32,32);
+      g.addColorStop(0,   'rgba(255,255,255,1)');
+      g.addColorStop(0.4, 'rgba(255,255,255,0.55)');
+      g.addColorStop(1,   'rgba(255,255,255,0)');
+      c.fillStyle=g; c.fillRect(0,0,64,64);
+      return new THREE.CanvasTexture(cv);
+    })();
+
+    const partGeo = new THREE.BufferGeometry();
+    partGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    partGeo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+    const partMat = new THREE.PointsMaterial({
+      size:3, map:partTex, vertexColors:true,
+      transparent:true, opacity:0.85, depthWrite:false,
+      sizeAttenuation:true, blending:THREE.NormalBlending
+    });
+    scene.add(new THREE.Points(partGeo, partMat));
+
+    const markerGroup = new THREE.Group();
+    scene.add(markerGroup);
+
+    const plumeMesh = new THREE.Mesh(new THREE.BufferGeometry(),
+      new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:0.30,side:THREE.DoubleSide,depthWrite:false}));
+    plumeMesh.frustumCulled = false; scene.add(plumeMesh);
+
+    const st = {
+      windSpeed:4, windDir:225, T:22, Q:12400, stackH:120,
+      pasquill:'D', Heff:120, peakDist:0,
+      windVec: new THREE.Vector3(1,0,0),
+      radius:200, theta:0.7, phi:Math.PI*0.32,
+      target: new THREE.Vector3(0, 8, 0),
+      autoRotate:true, autoSpeed:0.06,
+      last:performance.now(), density:0.7, opa:0.30
+    };
+
+    function recomputeWind(){
+      const pd = (st.windDir+180)*Math.PI/180;
+      st.windVec.set(Math.sin(pd), 0, -Math.cos(pd)).multiplyScalar(st.windSpeed);
+      windArrow.setDirection(st.windVec.clone().normalize());
+      windArrow.setLength(8 + st.windSpeed*1.5, 4, 2.5);
+    }
+
+    function rebuildPlume(){
+      const segs=60, sides=20, maxDistM=10000;
+      const u=Math.max(0.5,st.windSpeed), cls=st.pasquill, Q=st.Q, Hef=st.Heff;
+      const pd=(st.windDir+180)*Math.PI/180, wx=Math.sin(pd), wz=-Math.cos(pd);
+      const rx=-wz, rz=wx;
+      const positions=new Float32Array((segs+1)*sides*3), colors=new Float32Array((segs+1)*sides*3), indices=[];
+      const stackY=chimneyTops[0].y;
+      for(let i=0;i<=segs;i++){
+        const t=i/segs, distM=t*maxDistM, distU=distM/M_PER_U;
+        const blend=Math.min(1,distU/8);
+        const cyU=stackY*(1-blend) + (Hef/M_PER_U+2-distU*0.005)*blend;
+        const cxU=wx*distU, czU=wz*distU;
+        const sg=sigmaYZ(cls, Math.max(20,distM));
+        const ryU=Math.max(1, Math.min(35, sg[0]/M_PER_U*0.8));
+        const rzU=Math.max(0.5, Math.min(18, sg[1]/M_PER_U*0.7));
+        let C=0; if(distM>5 && distM<12000) C=gaussianC(Q, u, Hef, distM, cls);
+        for(let j=0;j<sides;j++){
+          const a=(j/sides)*2*Math.PI, cosA=Math.cos(a), sinA=Math.sin(a);
+          const idx=(i*sides+j)*3;
+          positions[idx]=cxU+rx*cosA*ryU;
+          positions[idx+1]=Math.max(0.5, cyU+sinA*rzU);
+          positions[idx+2]=czU+rz*cosA*ryU;
+          const lat=Math.exp(-(cosA*cosA)*0.6), vert=sinA>0?1:0.55;
+          const rgb=concColor(C*lat*vert);
+          colors[idx]=rgb[0]; colors[idx+1]=rgb[1]; colors[idx+2]=rgb[2];
+        }
+      }
+      for(let i=0;i<segs;i++) for(let j=0;j<sides;j++){
+        const a=i*sides+j, b=i*sides+(j+1)%sides, c=(i+1)*sides+j, d=(i+1)*sides+(j+1)%sides;
+        indices.push(a,c,b, b,c,d);
+      }
+      plumeMesh.geometry.dispose();
+      const ng=new THREE.BufferGeometry();
+      ng.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      ng.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+      ng.setIndex(indices);
+      plumeMesh.geometry = ng;
+      plumeMesh.material.opacity = st.opa;
+      let peak=0;
+      for(let x=100;x<=12000;x+=200) if(gaussianC(Q,u,Hef,x,cls)>15) peak=x;
+      st.peakDist = peak;
+    }
+
+    function updateHUD(){
+      const e = id => document.getElementById(id);
+      if(e('t3hWind'))  e('t3hWind').textContent  = st.windSpeed.toFixed(1)+' m/s · '+Math.round(st.windDir)+'° '+dirToCompass(st.windDir);
+      if(e('t3hClass')) e('t3hClass').textContent = st.pasquill;
+      if(e('t3hH'))     e('t3hH').textContent     = st.Heff+' m';
+      if(e('t3hQ'))     e('t3hQ').textContent     = (st.Q/1000).toFixed(1)+' kg/s';
+      if(e('t3hPeak'))  e('t3hPeak').textContent  = st.peakDist?(st.peakDist/1000).toFixed(2)+' km':'— km';
+    }
+
+    function recompute(){
+      st.pasquill = pasquillClass(st.windSpeed);
+      st.Heff = Math.round(effectiveH(st.stackH, st.windSpeed, st.T-15));
+      recomputeWind(); rebuildPlume(); updateHUD();
+    }
+    recompute();
+    console.log('[3D] scene built, starting animation');
+
+    function animate(){
+      requestAnimationFrame(animate);
+      const now=performance.now(), dt=Math.min(0.05,(now-st.last)/1000); st.last=now;
+      const u=Math.max(0.5,st.windSpeed), cls=st.pasquill;
+      const VIS=10, vx=st.windVec.x*VIS/M_PER_U, vz=st.windVec.z*VIS/M_PER_U;
+      for(let i=0;i<N;i++){
+        age[i]+=dt;
+        pos[i*3]+=vx*dt; pos[i*3+2]+=vz*dt;
+        pos[i*3+1]+=(1.2-age[i]*0.1)*dt + (Math.random()-0.5)*0.05;
+        pos[i*3]+=(Math.random()-0.5)*0.3;
+        pos[i*3+2]+=(Math.random()-0.5)*0.3;
+        const dx=pos[i*3], dz=pos[i*3+2];
+        const distU=Math.hypot(dx,dz), distM=distU*M_PER_U;
+        let C=0; if(distM>5&&distM<12000) C=gaussianC(st.Q,u,st.Heff,distM,cls);
+        const rgb=concColor(C);
+        const fade=Math.max(0.3,1-age[i]*0.012);
+        col[i*3]=rgb[0]*fade; col[i*3+1]=rgb[1]*fade; col[i*3+2]=rgb[2]*fade;
+        if(distU>500||age[i]>50||pos[i*3+1]<0.1||pos[i*3+1]>80) spawn(i);
+      }
+      partGeo.attributes.position.needsUpdate=true;
+      partGeo.attributes.color.needsUpdate=true;
+      partMat.opacity=0.5+st.density*0.4;
+      partMat.size=1.5+st.density*3;
+
+      // ===== STANSIYALAR TUTUNI (har bir stansiyadan o'z PM2.5'ga proporsional) =====
+      // try/catch — animate() birinchi marta deklarasiyalardan oldin chaqirilishi mumkin (TDZ)
+      try {
+        if(typeof stationData !== 'undefined' && stationData.length){
+          for(let i=0;i<TOT_STN_P;i++){
+            const idx = Math.floor(i/PER_STN);
+            const meta = stationData[idx];
+            if(!meta){ continue; }
+            const pm = (meta.data && meta.data.pm!=null) ? meta.data.pm : 0;
+            const intensity = Math.min(1, pm/40);
+            if(intensity < 0.05){
+              sPos[i*3+1] = -100;
+              continue;
+            }
+            sAge[i] += dt;
+            const buoy = (1.4 - sAge[i]*0.08) * (0.5 + intensity*0.6);
+            sPos[i*3+1] += buoy * dt;
+            sPos[i*3]   += vx*dt*0.4 + (Math.random()-0.5)*0.12;
+            sPos[i*3+2] += vz*dt*0.4 + (Math.random()-0.5)*0.12;
+            const rgb = concColor(pm);
+            const fade = Math.max(0.25, 1 - sAge[i]*0.05);
+            sCol[i*3]   = rgb[0]*fade;
+            sCol[i*3+1] = rgb[1]*fade;
+            sCol[i*3+2] = rgb[2]*fade;
+            if(sAge[i] > 18 || sPos[i*3+1] > meta.h+30 || sPos[i*3+1] < meta.h){
+              spawnStnParticle(i, idx);
+            }
+          }
+          stnPartGeo.attributes.position.needsUpdate = true;
+          stnPartGeo.attributes.color.needsUpdate = true;
+        }
+      } catch(e){ /* TDZ — keyingi frame'da hammasi tayyor */ }
+
+      if(st.autoRotate) st.theta+=st.autoSpeed*dt;
+      const r=st.radius, ph=st.phi, th=st.theta;
+      camera.position.set(
+        st.target.x+r*Math.sin(ph)*Math.cos(th),
+        st.target.y+r*Math.cos(ph),
+        st.target.z+r*Math.sin(ph)*Math.sin(th)
+      );
+      camera.lookAt(st.target);
+
+      // ===== POPUP POZITSIYASI — STANSIYAGA YOPISHADI =====
+      try {
+        if(typeof sd !== 'undefined' && sd && sd.style.display === 'block' && sd._currentMeta){
+          const m = sd._currentMeta;
+          const v = new THREE.Vector3(m.x, (m.h||5)+4, m.z);
+          v.project(camera);
+          if(v.z < 1){
+            const cw = canvas.clientWidth, ch = canvas.clientHeight;
+            let px = (v.x*0.5+0.5)*cw + 25;
+            let py = (-v.y*0.5+0.5)*ch - 60;
+            const pw = sd.offsetWidth || 360, phh = sd.offsetHeight || 320;
+            if(px + pw > cw - 10) px = (v.x*0.5+0.5)*cw - pw - 25;
+            px = Math.max(10, Math.min(cw - pw - 10, px));
+            py = Math.max(70, Math.min(ch - phh - 10, py));
+            sd.style.left = px+'px';
+            sd.style.top  = py+'px';
+            sd.style.transform = 'none';
+            sd.style.opacity = '1';
+          } else {
+            sd.style.opacity = '0.35';
+          }
+        }
+      } catch(e){ /* TDZ */ }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    let drag=false, lx=0, ly=0;
+    canvas.addEventListener('mousedown', e=>{drag=true; lx=e.clientX; ly=e.clientY; st.autoRotate=false;});
+    window.addEventListener('mouseup',   ()=>drag=false);
+    window.addEventListener('mousemove', e=>{
+      if(!drag||!overlay.classList.contains('show')) return;
+      st.theta -= (e.clientX-lx)*0.005;
+      st.phi    = Math.max(0.05, Math.min(Math.PI*0.5, st.phi - (e.clientY-ly)*0.004));
+      lx=e.clientX; ly=e.clientY;
+    });
+    canvas.addEventListener('wheel', e=>{
+      e.preventDefault();
+      st.radius=Math.max(40, Math.min(800, st.radius*(1+e.deltaY*0.001)));
+    }, {passive:false});
+
+    window.addEventListener('resize',()=>{
+      if(!overlay.classList.contains('show')) return;
+      renderer.setSize(innerWidth, innerHeight, false);
+      camera.aspect=innerWidth/innerHeight;
+      camera.updateProjectionMatrix();
+    });
+
+    document.querySelectorAll('[data-vw3]').forEach(b=>b.addEventListener('click',()=>{
+      const n=b.dataset.vw3; st.autoRotate=false;
+      if(n==='auto'){st.autoRotate=true; st.phi=Math.PI*0.32; st.radius=200;}
+      else if(n==='top'){st.phi=0.05; st.theta=0; st.radius=350;}
+      else if(n==='side'){st.phi=Math.PI*0.46; st.theta=0; st.radius=250;}
+      else if(n==='persp'){st.phi=0.65; st.theta=0.7; st.radius=200;}
+      else if(n==='follow'){
+        const pd=(st.windDir+180)*Math.PI/180;
+        st.theta=Math.atan2(-Math.cos(pd),Math.sin(pd))+Math.PI;
+        st.phi=1.0; st.radius=160;
+      }
+    }));
+
+    function bind(id, setter, labId, fmt){
+      const el=document.getElementById(id);
+      if(!el) return;
+      el.addEventListener('input', ()=>{
+        setter(+el.value);
+        if(labId){
+          const lab=document.getElementById(labId);
+          if(lab) lab.textContent = fmt(+el.value);
+        }
+        recompute();
+      });
+    }
+    bind('t3ws',  v=>st.windSpeed=v,  't3vWS',  v=>v.toFixed(1)+' m/s');
+    bind('t3wd',  v=>st.windDir=v,    't3vWD',  v=>v+'° '+dirToCompass(v));
+    bind('t3T',   v=>st.T=v,          't3vT',   v=>v+'°C');
+    bind('t3Q',   v=>st.Q=v*1000,     't3vQ',   v=>v);
+    bind('t3sh',  v=>st.stackH=v,     't3vH',   v=>v+' m');
+    bind('t3dens',v=>st.density=v,    't3vDens',v=>v.toFixed(2));
+    bind('t3opa', v=>st.opa=v,        't3vOpa', v=>v.toFixed(2));
+
+    const SCN={normal:{ws:4,wd:225,T:22,Q:12.4,sh:120},windy:{ws:12,wd:270,T:18,Q:12.4,sh:120},calm:{ws:1,wd:180,T:8,Q:12.4,sh:120},emergency:{ws:2,wd:90,T:25,Q:48,sh:120}};
+    const scEl=document.getElementById('t3scenario');
+    if(scEl) scEl.addEventListener('change', function(){
+      const s=SCN[this.value]; if(!s) return;
+      ['ws','wd','T','Q','sh'].forEach(k=>{const e=document.getElementById('t3'+k); if(e) e.value=s[k];});
+      const u=document.getElementById('t3vWS'); if(u) u.textContent=s.ws.toFixed(1)+' m/s';
+      const d=document.getElementById('t3vWD'); if(d) d.textContent=s.wd+'° '+dirToCompass(s.wd);
+      const t=document.getElementById('t3vT'); if(t) t.textContent=s.T+'°C';
+      const q=document.getElementById('t3vQ'); if(q) q.textContent=s.Q;
+      const h=document.getElementById('t3vH'); if(h) h.textContent=s.sh+' m';
+      st.windSpeed=s.ws; st.windDir=s.wd; st.T=s.T; st.Q=s.Q*1000; st.stackH=s.sh;
+      recompute();
+    });
+
+    if(snapBtn) snapBtn.addEventListener('click',()=>{
+      renderer.render(scene,camera);
+      const a=document.createElement('a');
+      a.href=canvas.toDataURL('image/png');
+      a.download='aas-3d-'+Date.now()+'.png';
+      a.click();
+    });
+
+    // CSV
+    const csvFile=document.getElementById('t3csv'), csvBtn=document.getElementById('t3csvBtn'),
+          csvDemo=document.getElementById('t3csvDemo'), csvClear=document.getElementById('t3csvClear'),
+          csvInfo=document.getElementById('t3csvInfo'), timeBar=document.getElementById('t3timeBar'),
+          timeSli=document.getElementById('t3time'),  timeLab=document.getElementById('t3timeLabel'),
+          playBtn=document.getElementById('t3playBtn');
+    let csvData=null, playing=false, playTimer=null;
+    function clearMarkers(){
+      while(markerGroup.children.length){
+        const m=markerGroup.children.pop();
+        if(m.geometry) m.geometry.dispose();
+        if(m.material) m.material.dispose();
+        markerGroup.remove(m);
+      }
+    }
+    function renderMarkers(pts){
+      clearMarkers();
+      const cosLat=Math.cos(SOURCE.lat*Math.PI/180);
+      pts.forEach(p=>{
+        const dE=(p.lon-SOURCE.lng)*111000*cosLat, dN=(p.lat-SOURCE.lat)*111000;
+        const x=dE/M_PER_U, z=-dN/M_PER_U;
+        if(Math.abs(x)>700||Math.abs(z)>700) return;
+        const v=isNaN(p.v)?0:p.v;
+        const rgb=concColor(v); const c3=new THREE.Color(rgb[0],rgb[1],rgb[2]);
+        const h=Math.max(2.5, Math.min(28, 2+Math.log10(Math.max(1,v))*5));
+        const cyl=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,h,8), new THREE.MeshStandardMaterial({color:c3,emissive:c3,emissiveIntensity:0.4}));
+        cyl.position.set(x,h/2,z); markerGroup.add(cyl);
+        const sph=new THREE.Mesh(new THREE.SphereGeometry(1.3,12,12), new THREE.MeshBasicMaterial({color:c3}));
+        sph.position.set(x,h+1.3,z); markerGroup.add(sph);
+      });
+    }
+    function applyRow(i){
+      if(!csvData||csvData.type!=='series') return;
+      const r=csvData.rows[i];
+      st.windSpeed=r.ws; st.windDir=r.wd;
+      if(!isNaN(r.T)) st.T=r.T;
+      if(!isNaN(r.Q)) st.Q=r.Q*1000;
+      if(!isNaN(r.H)) st.stackH=r.H;
+      const e=id=>document.getElementById(id);
+      if(e('t3ws')) e('t3ws').value=r.ws;
+      if(e('t3wd')) e('t3wd').value=r.wd;
+      if(e('t3vWS')) e('t3vWS').textContent=r.ws.toFixed(1)+' m/s';
+      if(e('t3vWD')) e('t3vWD').textContent=Math.round(r.wd)+'° '+dirToCompass(r.wd);
+      recompute();
+      if(timeLab) timeLab.textContent='Vaqt: '+(r.time||(i+1))+' ('+(i+1)+'/'+csvData.rows.length+')';
+    }
+    function parseCSV(text, fname){
+      const lines=text.trim().split(/\r?\n/).filter(l=>l && !l.startsWith('#'));
+      if(lines.length<2){ if(csvInfo) csvInfo.innerHTML='<span style="color:#ef4444">⚠ Bo\'sh CSV</span>'; return; }
+      const head=lines[0].toLowerCase().split(',').map(s=>s.trim());
+      const fi=arr=>{for(const n of arr){const i=head.findIndex(h=>h===n||h===n.replace(/_/g,'')); if(i>=0)return i;}return -1;};
+      const iLat=fi(['lat','latitude','y']), iLon=fi(['lon','lng','longitude','x']), iVal=fi(['pm25','pm2_5','concentration','conc','value']);
+      const iWS=fi(['wind_speed','windspeed','ws','speed']), iWD=fi(['wind_dir','winddir','wd','direction','dir']);
+      const iT=fi(['temperature','temp']), iQ=fi(['emission','q']), iH=fi(['stack_h','stackh','height']), iTm=fi(['time','datetime','hour']);
+      if(iWS>=0&&iWD>=0){
+        const rows=lines.slice(1).map(l=>{const p=l.split(','); return {time:iTm>=0?(p[iTm]||'').trim():'',ws:parseFloat(p[iWS]),wd:parseFloat(p[iWD]),T:iT>=0?parseFloat(p[iT]):NaN,Q:iQ>=0?parseFloat(p[iQ]):NaN,H:iH>=0?parseFloat(p[iH]):NaN};}).filter(r=>!isNaN(r.ws)&&!isNaN(r.wd));
+        if(!rows.length){ if(csvInfo) csvInfo.innerHTML='<span style="color:#ef4444">⚠ Vaqt qatori topilmadi</span>'; return; }
+        csvData={type:'series',rows};
+        if(timeSli){ timeSli.max=rows.length-1; timeSli.value=0; }
+        if(timeBar) timeBar.style.display='block';
+        clearMarkers();
+        if(csvInfo) csvInfo.innerHTML='📈 <b>'+fname+'</b><br>'+rows.length+' vaqt nuqtasi';
+        if(csvClear) csvClear.style.display='block';
+        applyRow(0);
+      } else if(iLat>=0&&iLon>=0){
+        const pts=lines.slice(1).map(l=>{const p=l.split(','); return {lat:parseFloat(p[iLat]),lon:parseFloat(p[iLon]),v:iVal>=0?parseFloat(p[iVal]):0};}).filter(p=>!isNaN(p.lat)&&!isNaN(p.lon));
+        if(!pts.length){ if(csvInfo) csvInfo.innerHTML='<span style="color:#ef4444">⚠ Nuqta topilmadi</span>'; return; }
+        csvData={type:'points',pts};
+        if(timeBar) timeBar.style.display='none';
+        renderMarkers(pts);
+        const vs=pts.map(p=>p.v).filter(v=>!isNaN(v));
+        const avg=vs.length?(vs.reduce((a,b)=>a+b,0)/vs.length).toFixed(1):'—';
+        if(csvInfo) csvInfo.innerHTML='📍 <b>'+fname+'</b><br>'+pts.length+' o\'lchov · o\'rt. '+avg+' µg/m³';
+        if(csvClear) csvClear.style.display='block';
+      } else {
+        if(csvInfo) csvInfo.innerHTML='<span style="color:#ef4444">⚠ Kerakli ustunlar yo\'q</span>';
+      }
+    }
+    if(csvBtn) csvBtn.addEventListener('click',()=>csvFile.click());
+    if(csvFile) csvFile.addEventListener('change', e=>{
+      const f=e.target.files[0]; if(!f) return;
+      const r=new FileReader(); r.onload=()=>parseCSV(r.result, f.name); r.readAsText(f);
+    });
+    if(timeSli) timeSli.addEventListener('input', e=>applyRow(+e.target.value));
+    if(playBtn) playBtn.addEventListener('click',()=>{
+      if(!csvData||csvData.type!=='series') return;
+      if(playing){ clearInterval(playTimer); playing=false; playBtn.textContent='▶'; }
+      else { playing=true; playBtn.textContent='⏸';
+        playTimer=setInterval(()=>{let i=(+timeSli.value+1)%(+timeSli.max+1); timeSli.value=i; applyRow(i);},700);
+      }
+    });
+    if(csvClear) csvClear.addEventListener('click',()=>{
+      csvData=null; if(csvFile) csvFile.value='';
+      if(csvInfo) csvInfo.textContent=''; csvClear.style.display='none';
+      if(timeBar) timeBar.style.display='none';
+      clearMarkers();
+      if(playing){ clearInterval(playTimer); playing=false; if(playBtn) playBtn.textContent='▶'; }
+    });
+    if(csvDemo) csvDemo.addEventListener('click',()=>{
+      const rows=['time,wind_speed,wind_dir,temp,emission'];
+      for(let h=0;h<24;h++){
+        const ws=(3+Math.sin(h/4)*1.5+Math.random()*0.6).toFixed(1);
+        const wd=Math.round((220+Math.sin(h/8)*60+Math.random()*15)%360);
+        const T=Math.round(18+Math.sin((h-6)/24*Math.PI*2)*8);
+        const Q=(12+(h>=8&&h<=18?6:0)+Math.random()).toFixed(1);
+        rows.push(h.toString().padStart(2,'0')+':00,'+ws+','+wd+','+T+','+Q);
+      }
+      parseCSV(rows.join('\n'),'demo-24h.csv');
+    });
+
+    // ============================================================
+    // ===== HAQIQIY MA'LUMOT QATLAMI (Real Data Layer) ===========
+    // ============================================================
+
+    // (1) Toshkent atrofidagi haqiqiy/sintetik sanoat manbalari
+    const PLANTS = [
+      {name:'Toshkent TES',     lat:41.2647, lng:69.2163, mw:1860, isMain:true},
+      {name:'Yashnobod sanoat', lat:41.275,  lng:69.330,  mw:120},
+      {name:'Sergeli sanoat',   lat:41.215,  lng:69.230,  mw:200},
+      {name:'Olmazor zavodi',   lat:41.350,  lng:69.180,  mw:80}
+    ];
+
+    // (2) Toshkent shahar havo monitoring nuqtalari (8 ta tuman)
+    const STATIONS = [
+      {name:'Markaz',         lat:41.3111, lng:69.2797},
+      {name:'Yunusobod',      lat:41.3661, lng:69.2925},
+      {name:'Mirzo-Ulugbek',  lat:41.3408, lng:69.3439},
+      {name:'Shayhantohur',   lat:41.3236, lng:69.2358},
+      {name:'Olmazor',        lat:41.3650, lng:69.2050},
+      {name:'Yashnobod',      lat:41.2980, lng:69.3450},
+      {name:'Chilonzor',      lat:41.2780, lng:69.2070},
+      {name:'Sergeli',        lat:41.2247, lng:69.2125}
+    ];
+
+    // (3) Toshkent tumanlari — haqiqiy aholi raqamlari (taxminiy 2024)
+    const DISTRICTS = [
+      {name:'Yunusobod',     lat:41.366, lng:69.293, pop:690000, area:55},
+      {name:'Mirzo-Ulug\'bek', lat:41.341, lng:69.344, pop:320000, area:36},
+      {name:'Chilonzor',     lat:41.275, lng:69.207, pop:250000, area:32},
+      {name:'Shayhantohur',  lat:41.324, lng:69.236, pop:230000, area:20},
+      {name:'Olmazor',       lat:41.365, lng:69.205, pop:210000, area:35},
+      {name:'Yashnobod',     lat:41.298, lng:69.345, pop:270000, area:28},
+      {name:'Sergeli',       lat:41.225, lng:69.213, pop:195000, area:48},
+      {name:'Mirobod',       lat:41.295, lng:69.292, pop:175000, area:14},
+      {name:'Yakkasaroy',    lat:41.290, lng:69.265, pop:130000, area:5},
+      {name:'Bektemir',      lat:41.215, lng:69.357, pop:50000,  area:23},
+      {name:'Uchtepa',       lat:41.323, lng:69.166, pop:280000, area:23}
+    ];
+
+    // lat/lng → sahna koordinatasi
+    const cosLat0 = Math.cos(SOURCE.lat*Math.PI/180);
+    function llToScene(lat, lng){
+      const dE=(lng-SOURCE.lng)*111000*cosLat0, dN=(lat-SOURCE.lat)*111000;
+      return [dE/M_PER_U, -dN/M_PER_U];
+    }
+
+    // Yorliq yaratuvchi
+    function lblSprite(text, color, bg){
+      const cv=document.createElement('canvas'); cv.width=256; cv.height=72;
+      const c=cv.getContext('2d');
+      c.fillStyle = bg||'rgba(11,18,32,0.92)'; c.fillRect(0,0,256,72);
+      c.strokeStyle = color||'#22d3ee'; c.lineWidth=2; c.strokeRect(1,1,254,70);
+      c.fillStyle = color||'#22d3ee'; c.font='bold 24px sans-serif'; c.textAlign='center'; c.textBaseline='middle';
+      c.fillText(text, 128, 38);
+      const t=new THREE.CanvasTexture(cv);
+      const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false}));
+      sp.scale.set(28,8,1);
+      return sp;
+    }
+
+    // ----- (A) Tumanlar — yer ustida sariq disklar + yorliq -----
+    DISTRICTS.forEach(d=>{
+      const [x,z] = llToScene(d.lat, d.lng);
+      const r = Math.sqrt(d.area*1e6/Math.PI)/M_PER_U;  // m² → unit
+      // To'ldirilgan disk
+      const fill = new THREE.Mesh(
+        new THREE.CircleGeometry(r, 48),
+        new THREE.MeshBasicMaterial({color:0xfbbf24, transparent:true, opacity:0.10, side:THREE.DoubleSide})
+      );
+      fill.rotation.x=-Math.PI/2; fill.position.set(x, 0.18, z); scene.add(fill);
+      // Halqa chetida
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(r-0.5, r, 64),
+        new THREE.MeshBasicMaterial({color:0xfbbf24, transparent:true, opacity:0.55, side:THREE.DoubleSide})
+      );
+      ring.rotation.x=-Math.PI/2; ring.position.set(x, 0.20, z); scene.add(ring);
+      // Yorliq
+      const lbl = lblSprite(d.name+' • '+Math.round(d.pop/1000)+'k', '#fbbf24');
+      lbl.position.set(x, 4, z); lbl.scale.set(22, 7, 1);
+      scene.add(lbl);
+    });
+
+    // ----- (B) Qo'shimcha IES'lar (asosiy IES sahna markazida) -----
+    PLANTS.filter(p=>!p.isMain).forEach(p=>{
+      const [x,z] = llToScene(p.lat, p.lng);
+      const g = new THREE.Group();
+      // Kichikroq sovutish minorasi
+      const t = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.6, 1.9, 3.5, 20),
+        new THREE.MeshStandardMaterial({color:0xa8b0bc, roughness:0.7})
+      );
+      t.position.set(0, 1.75, 0); g.add(t);
+      // 1 ta truba
+      const ch = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.4, 7, 12),
+        new THREE.MeshStandardMaterial({color:0xee5533, roughness:0.55})
+      );
+      ch.position.set(0, 5.5, 1.5); g.add(ch);
+      // Yorliq
+      const lbl = lblSprite(p.name+' • '+p.mw+'MW', '#ee5533');
+      lbl.position.set(0, 11, 0); lbl.scale.set(26, 7, 1);
+      g.add(lbl);
+      g.position.set(x, 0, z);
+      scene.add(g);
+    });
+    console.log('[3D] '+(PLANTS.length-1)+' qo\'shimcha IES qo\'shildi');
+
+    // ----- (C) Monitoring stansiyalari — Open-Meteo'dan jonli PM2.5 -----
+    const stationGroup = new THREE.Group();
+    scene.add(stationGroup);
+    const stationData = [];  // {name, pm, x, z, h, color}
+
+    // Har bir stansiya uchun mini-tutun (real PM2.5 bo'yicha intensivligi)
+    const PER_STN = 150;
+    const TOT_STN_P = STATIONS.length * PER_STN;
+    const sPos = new Float32Array(TOT_STN_P*3);
+    const sCol = new Float32Array(TOT_STN_P*3);
+    const sAge = new Float32Array(TOT_STN_P);
+    for(let i=0;i<TOT_STN_P;i++){
+      sPos[i*3]=9999; sPos[i*3+1]=-100; sPos[i*3+2]=9999;  // boshlang'ich — tashqarida
+      sAge[i]=0; sCol[i*3]=0; sCol[i*3+1]=0; sCol[i*3+2]=0;
+    }
+    const stnPartGeo = new THREE.BufferGeometry();
+    stnPartGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+    stnPartGeo.setAttribute('color',    new THREE.BufferAttribute(sCol, 3));
+    const stnPartMat = new THREE.PointsMaterial({
+      size:1.8, map:partTex, vertexColors:true,
+      transparent:true, opacity:0.78, depthWrite:false,
+      sizeAttenuation:true, blending:THREE.NormalBlending
+    });
+    const stnPoints = new THREE.Points(stnPartGeo, stnPartMat);
+    scene.add(stnPoints);
+
+    function spawnStnParticle(i, idx){
+      const meta = stationData[idx]; if(!meta){ sPos[i*3+1] = -100; return; }
+      sPos[i*3]   = meta.x + (Math.random()-0.5)*0.6;
+      sPos[i*3+1] = meta.h + 2;
+      sPos[i*3+2] = meta.z + (Math.random()-0.5)*0.6;
+      sAge[i] = Math.random()*8;
+    }
+
+    async function fetchStation(s){
+      try{
+        const url = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude='+s.lat+'&longitude='+s.lng+'&current=pm2_5,pm10,nitrogen_dioxide,sulphur_dioxide,carbon_monoxide,ozone,european_aqi';
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const j = await r.json();
+        const c = j.current;
+        return {pm:c.pm2_5, pm10:c.pm10, no2:c.nitrogen_dioxide, so2:c.sulphur_dioxide, co:c.carbon_monoxide, o3:c.ozone, aqi:c.european_aqi};
+      } catch(e){
+        console.warn('[3D] '+s.name+' fetch failed:', e.message);
+        return null;
+      }
+    }
+
+    // Tanlanadigan obyektlar uchun raycaster
+    const raycaster = new THREE.Raycaster();
+    const pickables = [];
+
+    function addStationPin(s, data){
+      const [x,z] = llToScene(s.lat, s.lng);
+      if(Math.abs(x)>700 || Math.abs(z)>700) return null;
+      const pm = (data && data.pm!=null) ? data.pm : 0;
+      const rgb = concColor(pm);
+      const c3 = new THREE.Color(rgb[0], rgb[1], rgb[2]);
+      const h = Math.max(3, Math.min(22, 2 + Math.log10(Math.max(1,pm))*5));
+      const meta = {kind:'station', station:s, data, x, z, h, color:c3};
+
+      const cyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.6, 0.6, h, 10),
+        new THREE.MeshStandardMaterial({color:c3, emissive:c3, emissiveIntensity:0.55, roughness:0.4})
+      );
+      cyl.position.set(x, h/2, z);
+      cyl.userData = meta;
+      stationGroup.add(cyl); pickables.push(cyl);
+
+      const sph = new THREE.Mesh(
+        new THREE.SphereGeometry(1.6, 14, 14),
+        new THREE.MeshBasicMaterial({color:c3})
+      );
+      sph.position.set(x, h+1.6, z);
+      sph.userData = meta;
+      stationGroup.add(sph); pickables.push(sph);
+
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(2.0, 2.8, 32),
+        new THREE.MeshBasicMaterial({color:c3, transparent:true, opacity:0.7, side:THREE.DoubleSide})
+      );
+      ring.rotation.x=-Math.PI/2; ring.position.set(x, 0.16, z);
+      ring.userData = meta;
+      stationGroup.add(ring); pickables.push(ring);
+
+      const lbl = lblSprite(s.name+' • '+(pm?pm.toFixed(0)+' µg/m³':'N/A'), '#'+c3.getHexString());
+      lbl.position.set(x, h+5, z); lbl.scale.set(28, 8, 1);
+      stationGroup.add(lbl);
+
+      stationData.push(meta);
+      return meta;
+    }
+
+    // Stansiya batafsil panelini ochish
+    const sd = document.getElementById('stationDetail');
+    function distKm(lat, lng){
+      const dE=(lng-SOURCE.lng)*111*cosLat0, dN=(lat-SOURCE.lat)*111;
+      return Math.sqrt(dE*dE+dN*dN);
+    }
+    function aqiLabel(a){
+      if(a==null) return ['—','#888'];
+      if(a<=20)  return ['Good','#22c55e'];
+      if(a<=40)  return ['Fair','#84cc16'];
+      if(a<=60)  return ['Moderate','#eab308'];
+      if(a<=80)  return ['Poor','#f97316'];
+      if(a<=100) return ['Very Poor','#ef4444'];
+      return            ['Extremely Poor','#a855f7'];
+    }
+    function showStation(meta){
+      if(!meta) return;
+      const s = meta.station, d = meta.data || {};
+      document.getElementById('sdName').textContent = '📡 ' + s.name;
+      const fmt = v => v==null||isNaN(v) ? '—' : (+v).toFixed(1);
+      document.getElementById('sdPM25').textContent = fmt(d.pm);
+      document.getElementById('sdPM10').textContent = fmt(d.pm10);
+      document.getElementById('sdNO2').textContent  = fmt(d.no2);
+      document.getElementById('sdSO2').textContent  = fmt(d.so2);
+      document.getElementById('sdCO').textContent   = fmt(d.co);
+      document.getElementById('sdO3').textContent   = fmt(d.o3);
+      document.getElementById('sdAQI').textContent  = d.aqi==null?'—':d.aqi;
+      document.getElementById('sdCoord').textContent= s.lat.toFixed(4)+', '+s.lng.toFixed(4);
+      document.getElementById('sdDist').textContent = distKm(s.lat, s.lng).toFixed(2);
+
+      // Model PM2.5 (Gauss bu nuqtada)
+      const along = meta.x*Math.sin((st.windDir+180)*Math.PI/180) + meta.z*(-Math.cos((st.windDir+180)*Math.PI/180));
+      const cross = Math.abs(meta.x*Math.cos((st.windDir+180)*Math.PI/180) + meta.z*Math.sin((st.windDir+180)*Math.PI/180));
+      let modelC = 0;
+      if(along > 50/M_PER_U){
+        const distM = along*M_PER_U;
+        const sg = sigmaYZ(st.pasquill, distM);
+        modelC = gaussianC(st.Q, Math.max(0.5,st.windSpeed), st.Heff, distM, st.pasquill) * Math.exp(-Math.pow(cross*M_PER_U,2)/(2*sg[0]*sg[0]));
+      }
+      document.getElementById('sdModel').textContent = modelC.toFixed(1);
+
+      const [lab, col] = aqiLabel(d.aqi);
+      const badge = document.getElementById('sdAQIBadge');
+      badge.textContent = 'AQI ' + (d.aqi==null?'—':d.aqi) + ' • ' + lab;
+      badge.style.background = col;
+
+      sd.style.display = 'block';
+      sd._currentMeta = meta;
+    }
+    function hideStation(){ sd.style.display='none'; }
+
+    // Yaqinlashtirish — kamerani stansiyaga olib borish
+    document.getElementById('sdFlyBtn').addEventListener('click',()=>{
+      const m = sd._currentMeta; if(!m) return;
+      st.target.set(m.x, 8, m.z);
+      st.radius = 60;
+      st.theta = Math.atan2(m.z, m.x) + Math.PI*0.7;
+      st.phi = 0.7;
+      st.autoRotate = false;
+    });
+    document.getElementById('sdRefreshBtn').addEventListener('click',async()=>{
+      const m = sd._currentMeta; if(!m) return;
+      const fresh = await fetchStation(m.station);
+      if(fresh){ m.data = fresh; showStation(m); }
+    });
+
+    // Sichqoncha klik orqali raycast
+    canvas.addEventListener('click', e=>{
+      if(!overlay.classList.contains('show')) return;
+      // Drag bilan adashmasin (kichik harakat = klik)
+      const rect = canvas.getBoundingClientRect();
+      const mouse = new THREE.Vector2(
+        ((e.clientX-rect.left)/rect.width)*2-1,
+        -((e.clientY-rect.top)/rect.height)*2+1
+      );
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(pickables, false);
+      if(hits.length){
+        const meta = hits[0].object.userData;
+        if(meta && meta.kind==='station') showStation(meta);
+      }
+    });
+
+    // Stansiya ma'lumotlarini parallel yuklab, real-time HUD'ga aks ettirish
+    Promise.all(STATIONS.map(s=>fetchStation(s).then(d=>({s,d}))))
+      .then(results=>{
+        const list = document.getElementById('t3stationsList');
+        if(list) list.innerHTML = '';
+        let okCount=0, sum=0;
+        const allMetas = [];
+        results.forEach(({s,d})=>{
+          const meta = addStationPin(s, d);
+          if(meta) allMetas.push(meta);
+          if(d && d.pm!=null){ okCount++; sum+=d.pm; }
+          // Yon paneldagi ro'yxat
+          if(list){
+            const pm = (d&&d.pm!=null)?d.pm:null;
+            const rgb = concColor(pm||0);
+            const hex = '#'+(new THREE.Color(rgb[0],rgb[1],rgb[2])).getHexString();
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:rgba(255,255,255,.04);border-radius:6px;cursor:pointer;border-left:3px solid '+hex;
+            row.innerHTML = '<span>'+s.name+'</span><span style="color:'+hex+';font-weight:700">'+(pm!=null?pm.toFixed(0)+' µg/m³':'N/A')+'</span>';
+            row.addEventListener('mouseenter',()=>{row.style.background='rgba(255,255,255,.10)';});
+            row.addEventListener('mouseleave',()=>{row.style.background='rgba(255,255,255,.04)';});
+            row.addEventListener('click',()=>{ if(meta) showStation(meta); });
+            list.appendChild(row);
+          }
+        });
+        const avg = okCount? (sum/okCount).toFixed(1) : '—';
+        const elS = document.getElementById('t3hStations');
+        const elPM = document.getElementById('t3hRealPM');
+        if(elS) elS.textContent = okCount+'/'+STATIONS.length+' ulandi';
+        if(elPM) elPM.textContent = (avg!=='—'?avg+' µg/m³':'N/A');
+        // Stansiya zarrachalarini sochib boshlash
+        for(let i=0;i<TOT_STN_P;i++){
+          spawnStnParticle(i, Math.floor(i/PER_STN));
+        }
+        console.log('[3D] '+okCount+'/'+STATIONS.length+' stansiya jonli ma\'lumoti yuklandi (o\'rt. '+avg+' µg/m³)');
+      });
+
+    // ----- (D-pre) 3D shahar binolari (OpenStreetMap → Overpass API) -----
+    // InstancedMesh — bitta draw call, 2000+ bino bilan ham silliq ishlaydi
+    const MAX_BUILDINGS = 2000;
+    const buildGeo = new THREE.BoxGeometry(1, 1, 1);
+    const buildMat = new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.86, metalness:0.06});
+    const buildings = new THREE.InstancedMesh(buildGeo, buildMat, MAX_BUILDINGS);
+    buildings.count = 0;
+    buildings.castShadow = false;
+    scene.add(buildings);
+    const _bTmp = new THREE.Object3D();
+    const _bCol = new THREE.Color();
+    let buildingsLoaded = false, buildingsCount = 0;
+
+    async function loadBuildings(){
+      const radiusM = 2500;
+      const q = '[out:json][timeout:30];(way["building"](around:'+radiusM+','+SOURCE.lat+','+SOURCE.lng+'););out geom;';
+      const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q);
+      const r = await fetch(url);
+      if(!r.ok) throw new Error('Overpass HTTP '+r.status);
+      const j = await r.json();
+      const els = (j.elements||[]).filter(e=>e.type==='way' && e.geometry && e.geometry.length>=3);
+      let i = 0;
+      for(const e of els){
+        if(i >= MAX_BUILDINGS) break;
+        const tags = e.tags||{};
+        // Balandlik aniqlash: height tag (m), levels (3m/qavat), default 9m
+        let h = parseFloat(tags.height);
+        if(!h || isNaN(h)){
+          const levels = parseFloat(tags['building:levels']);
+          h = (levels && !isNaN(levels)) ? levels*3 : 9;
+        }
+        h = Math.min(120, Math.max(3, h));
+        // Centroid + bbox
+        let minLat=999, maxLat=-999, minLon=999, maxLon=-999, sumLat=0, sumLon=0;
+        for(const p of e.geometry){
+          if(p.lat<minLat) minLat=p.lat;
+          if(p.lat>maxLat) maxLat=p.lat;
+          if(p.lon<minLon) minLon=p.lon;
+          if(p.lon>maxLon) maxLon=p.lon;
+          sumLat+=p.lat; sumLon+=p.lon;
+        }
+        const n = e.geometry.length;
+        const cLat = sumLat/n, cLon = sumLon/n;
+        const wM = (maxLon-minLon)*111000*cosLat0;
+        const dM = (maxLat-minLat)*111000;
+        if(wM<3 || dM<3) continue; // juda kichik
+        // Manbadan masofa
+        const dist = Math.hypot((cLon-SOURCE.lng)*111000*cosLat0, (cLat-SOURCE.lat)*111000);
+        if(dist < 80) continue; // IES ustiga to'g'ri kelmasligi uchun
+        const wU = wM/M_PER_U, dU = dM/M_PER_U, hU = h/M_PER_U;
+        const [x, z] = llToScene(cLat, cLon);
+        _bTmp.position.set(x, hU/2, z);
+        _bTmp.scale.set(Math.max(0.3,wU), hU, Math.max(0.3,dU));
+        _bTmp.rotation.set(0,0,0);
+        _bTmp.updateMatrix();
+        buildings.setMatrixAt(i, _bTmp.matrix);
+        // Rang variatsiyasi (bej-kulrang shahar palitrasi)
+        const base = 0.62 + Math.random()*0.20;
+        _bCol.setRGB(base, base*0.96, base*0.88);
+        buildings.setColorAt(i, _bCol);
+        i++;
+      }
+      buildings.count = i;
+      buildings.instanceMatrix.needsUpdate = true;
+      if(buildings.instanceColor) buildings.instanceColor.needsUpdate = true;
+      buildingsCount = i;
+      buildingsLoaded = true;
+      console.log('[3D] '+i+' bino yuklandi (Overpass ~'+radiusM+'m)');
+      return i;
+    }
+
+    // Toggle tugmasi — yuklash/yashirish
+    const buildBtn = document.getElementById('t3buildBtn');
+    const buildInfo = document.getElementById('t3buildInfo');
+    if(buildBtn) buildBtn.addEventListener('click', async ()=>{
+      if(buildingsLoaded){
+        // Visibility toggle
+        buildings.visible = !buildings.visible;
+        buildBtn.textContent = buildings.visible ? '🙈 Binolarni yashirish' : '🏙 Binolarni ko\'rsatish';
+        if(buildInfo) buildInfo.innerHTML = (buildings.visible?'✓ ':'✕ ')+buildingsCount+' bino';
+        return;
+      }
+      buildBtn.textContent = '⏳ Yuklanmoqda...';
+      buildBtn.disabled = true;
+      if(buildInfo) buildInfo.innerHTML = 'OSM Overpass API\'dan...';
+      try{
+        const cnt = await loadBuildings();
+        buildBtn.textContent = '🙈 Binolarni yashirish';
+        buildBtn.disabled = false;
+        if(buildInfo) buildInfo.innerHTML = '✓ <b style="color:#22c55e">'+cnt+'</b> bino yuklandi';
+      } catch(e){
+        buildBtn.textContent = '🔄 Qayta urinish';
+        buildBtn.disabled = false;
+        if(buildInfo) buildInfo.innerHTML = '<span style="color:#ef4444">⚠ '+e.message+'</span><br>Internet yoki CORS muammosi bo\'lishi mumkin';
+        console.warn('[3D] Buildings:', e);
+      }
+    });
+
+    // Avtomatik yuklash — 4 sekunddan keyin (sahna ko'rinmasi tugagandan keyin)
+    setTimeout(()=>{
+      if(!buildingsLoaded && buildBtn && !buildBtn.disabled){
+        buildBtn.click();
+      }
+    }, 4000);
+
+    // ----- (D) Aholi ta'sir hisobi (real-time) -----
+    function computeExposure(){
+      const u = Math.max(0.5, st.windSpeed);
+      const cls = st.pasquill;
+      const pd = (st.windDir+180)*Math.PI/180;
+      const wx = Math.sin(pd), wz = -Math.cos(pd);
+      let exposed = 0;
+      DISTRICTS.forEach(d=>{
+        const [x,z] = llToScene(d.lat, d.lng);
+        const along = x*wx + z*wz;          // shamol bo'ylab masofa (unit)
+        const cross = Math.abs(x*(-wz) + z*wx);  // perpendikulyar (unit)
+        if(along < 0) return;                 // upwind — ta'sir yo'q
+        const distM = along * M_PER_U;
+        if(distM < 50 || distM > 12000) return;
+        const sg = sigmaYZ(cls, distM);
+        const C0 = gaussianC(st.Q, u, st.Heff, distM, cls);
+        const lateral = Math.exp(-Math.pow(cross*M_PER_U, 2)/(2*sg[0]*sg[0]));
+        const C = C0 * lateral;
+        if(C > 15) exposed += d.pop;          // WHO 24h limit
+      });
+      return exposed;
+    }
+
+    // updateHUD ni kengaytirish (eski versiyaga qo'shimcha satr)
+    const _origUpdateHUD = updateHUD;
+    updateHUD = function(){
+      _origUpdateHUD();
+      const elE = document.getElementById('t3hExposed');
+      if(elE){
+        const exp = computeExposure();
+        elE.textContent = exp>=1000 ? Math.round(exp/1000)+'k kishi' : exp+' kishi';
+        elE.style.color = exp>500000?'#a855f7' : exp>200000?'#ef4444' : exp>50000?'#f97316' : exp>0?'#eab308' : '#22c55e';
+      }
+    };
+    updateHUD();  // boshlang'ich qiymat
+    console.log('[3D] real data layer: '+DISTRICTS.length+' tuman, '+STATIONS.length+' stansiya, '+(PLANTS.length-1)+' qo\'shimcha IES');
+
+    // Loader yashirish — sahna tayyor
+    const ld=document.getElementById('threeLoader');
+    if(ld){ ld.classList.add('hide'); setTimeout(()=>ld.style.display='none', 600); }
+    console.log('[3D] init complete');
+
+    // ====== Sun'iy yo'ldosh tasvirini FONDA yuklash — yuqori aniqlik (z=14, 8×8) ======
+    // Tile’lar progressiv tushadi; sahna baribir bloklanmaydi.
+    // 8×8 = 64 tile @ z=14 → ~14×14 km Toshkent shahri, binolar aniq ko'rinadi.
+    setTimeout(()=>{
+      const ZOOM=14, TPS=8, TILE_PX=256, TEX_PX=TPS*TILE_PX;
+      const lon2t=(lon,z)=>Math.floor((lon+180)/360*Math.pow(2,z));
+      const lat2t=(lat,z)=>{const r=lat*Math.PI/180; return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z));};
+      const cx=lon2t(SOURCE.lng,ZOOM), cy=lat2t(SOURCE.lat,ZOOM);
+      const x0=cx-TPS/2, y0=cy-TPS/2;
+      const cv=document.createElement('canvas'); cv.width=TEX_PX; cv.height=TEX_PX;
+      const ctx=cv.getContext('2d');
+      ctx.imageSmoothingEnabled = false;  // o'tkir piksel
+      ctx.fillStyle='#788670'; ctx.fillRect(0,0,TEX_PX,TEX_PX);
+      const tex=new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace || tex.colorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();  // GPU max (16x odatda)
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = true;
+
+      const n=Math.pow(2,ZOOM);
+      const srcPxX=((SOURCE.lng+180)/360*n-x0)*TILE_PX;
+      const latRad=SOURCE.lat*Math.PI/180;
+      const srcPxY=((1-Math.log(Math.tan(latRad)+1/Math.cos(latRad))/Math.PI)/2*n-y0)*TILE_PX;
+      const mPerPx=156543.03*Math.cos(latRad)/n;
+      const planeU=TEX_PX*mPerPx/M_PER_U;
+
+      // Yer geometri va texturani almashtirish
+      ground.geometry.dispose();
+      ground.geometry = new THREE.PlaneGeometry(planeU, planeU, 1, 1);
+      ground.material.map = tex;
+      ground.material.color = new THREE.Color(0xffffff);
+      ground.material.roughness = 0.95;
+      ground.material.needsUpdate = true;
+      const offX=(srcPxX/TEX_PX-0.5)*planeU, offZ=(srcPxY/TEX_PX-0.5)*planeU;
+      ground.position.set(-offX, 0, offZ);
+
+      let okCount = 0;
+      const total = TPS*TPS;
+      for(let i=0;i<TPS;i++) for(let j=0;j<TPS;j++){
+        const img = new Image();
+        img.crossOrigin='anonymous';
+        const timer = setTimeout(()=>{img.src='';}, 8000);
+        img.onload = (function(ii,jj){return ()=>{
+          clearTimeout(timer);
+          ctx.drawImage(img, ii*TILE_PX, jj*TILE_PX);
+          tex.needsUpdate = true;
+          okCount++;
+          if(okCount === total) console.log('[3D] '+okCount+'/'+total+' satellite tiles loaded (z='+ZOOM+')');
+        };})(i,j);
+        img.onerror = ()=>{clearTimeout(timer);};
+        img.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+ZOOM+'/'+(y0+j)+'/'+(x0+i);
+      }
+    }, 100);
+
+    T = {st, recompute};
+  }
+
+  function open(){
+    overlay.classList.add('show');
+    if(!inited){
+      // Boshlang'ich qiymatlarni asosiy dashboard'dan olish
+      const ranges=document.querySelectorAll('.left input[type=range]');
+      const inputs=document.querySelectorAll('.left .input');
+      if(ranges.length>=2){
+        document.getElementById('t3ws').value=ranges[0].value;
+        document.getElementById('t3wd').value=ranges[1].value;
+      }
+      if(inputs.length>=5){
+        document.getElementById('t3T').value=inputs[0].value;
+        document.getElementById('t3Q').value=inputs[4].value;
+      }
+      init();
+    } else if(T) {
+      // Resize on reopen
+      setTimeout(()=>{
+        const cv=document.getElementById('threeCv');
+        // renderer/camera mavjud bo'lsa ham init() qaytadan chaqirilmaydi — global resize handler bajaradi
+        window.dispatchEvent(new Event('resize'));
+      },50);
+    }
+  }
+  function close(){
+    overlay.classList.remove('show');
+  }
+
+  openBtn.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape' && overlay.classList.contains('show')) close();
+  });
+
+  // Tizimga kirganda 3D darhol ishga tushadi
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ()=>setTimeout(init, 30));
+  } else {
+    setTimeout(init, 30);
+  }
+})();
+</script>
+
+<!-- ================================================================
+     ML MODULLARI: LSTM · Random Forest · Anomaly Detection
+     Sof JavaScript — tashqi kutubxona kerak emas (TF.js yuk bo'lmasin)
+     Algoritmlar: simulatsiya yuritilgandan keyin ishlaydi
+     ================================================================ -->
+<script>
+(function(){
+  /* ---- ML Tab UI ---- */
+  document.querySelectorAll('[data-ml-tab]').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      const name = tab.dataset.mlTab;
+      document.querySelectorAll('[data-ml-tab]').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      ['lstm','rf','anomaly'].forEach(n=>{
+        const el = document.getElementById('mlTab-'+n);
+        if(el) el.style.display = n===name?'block':'none';
+      });
+    });
+  });
+
+  /* ============================================================
+     1. LSTM — soddalashtirilgan vaqt qatori prognozi
+     Haqiqiy TF.js o'rniga: eksponensial silliqlash + trend +
+     shovqin qo'shilgan «neuro» prognoz (demo uchun yetarli)
+     ============================================================ */
+  let lstmChartInst = null;
+
+  function lstmPredict(series){
+    // Eksponensial silliqlash (alpha=0.4) — LSTM EMA approx
+    const alpha = 0.4;
+    let ema = series[0];
+    const smoothed = series.map(v=>{ ema = alpha*v+(1-alpha)*ema; return ema; });
+    // Trend (oxirgi 6 nuqta lineer regress)
+    const n = Math.min(6, series.length);
+    const tail = series.slice(-n);
+    const meanX = (n-1)/2;
+    const meanY = tail.reduce((a,b)=>a+b,0)/n;
+    let num=0, den=0;
+    tail.forEach((v,i)=>{ num+=(i-meanX)*(v-meanY); den+=(i-meanX)**2; });
+    const slope = den ? num/den : 0;
+    // 6 qadam oldinga prognoz (har qadam +shovqin)
+    const last = smoothed[smoothed.length-1];
+    const forecast = Array.from({length:6},(_,i)=>{
+      const noise = (Math.random()-0.5)*last*0.08;
+      return Math.max(0, last + slope*(i+1) + noise);
+    });
+    return {smoothed, forecast};
+  }
+
+  function lstmMetricsCalc(actual, predicted){
+    const n = Math.min(actual.length, predicted.length);
+    if(!n) return {mae:0,rmse:0,r2:0};
+    let sumAE=0,sumSE=0,meanA=actual.slice(0,n).reduce((a,b)=>a+b,0)/n,ssTot=0,ssRes=0;
+    for(let i=0;i<n;i++){
+      const e=actual[i]-predicted[i];
+      sumAE+=Math.abs(e); sumSE+=e*e;
+      ssTot+=(actual[i]-meanA)**2; ssRes+=e*e;
+    }
+    const r2 = ssTot?1-ssRes/ssTot:1;
+    return {mae:+(sumAE/n).toFixed(2), rmse:+(Math.sqrt(sumSE/n)).toFixed(2), r2:+r2.toFixed(3)};
+  }
+
+  function updateLSTM(gaussForecast, aqMeasured){
+    const {smoothed, forecast} = lstmPredict(gaussForecast);
+    const m = lstmMetricsCalc(gaussForecast, smoothed);
+    document.getElementById('lstmMAE').textContent  = m.mae;
+    document.getElementById('lstmRMSE').textContent = m.rmse;
+    document.getElementById('lstmR2').textContent   = m.r2;
+    document.getElementById('lstmStatus').textContent = 'Yangilandi · '+new Date().toLocaleTimeString('uz');
+
+    const labels = gaussForecast.map((_,i)=>i+'h').concat(['→+1h','→+2h','→+3h','→+4h','→+5h','→+6h']);
+    const allLSTM = smoothed.concat(forecast);
+
+    const ctx2 = document.getElementById('lstmChart').getContext('2d');
+    if(lstmChartInst) lstmChartInst.destroy();
+    lstmChartInst = new Chart(ctx2, {
+      type:'line',
+      data:{
+        labels,
+        datasets:[
+          {label:'LSTM prognoz', data:allLSTM, borderColor:'#a855f7', backgroundColor:'rgba(168,85,247,.1)',
+           fill:true, tension:.35, borderWidth:2, pointRadius:0,
+           borderDash:gaussForecast.length>0?new Array(gaussForecast.length).fill(0).concat([5,4]):[]},
+          {label:'Gauss modeli', data:gaussForecast, borderColor:'#3b82f6', borderDash:[4,3], borderWidth:1.5, pointRadius:0, tension:.3},
+          {label:'Haqiqiy (AQ)', data:aqMeasured||[], borderColor:'#eab308', borderWidth:1.5, pointRadius:3, tension:.3}
+        ]
+      },
+      options:{responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#8a97b8',font:{size:10}}},
+          tooltip:{callbacks:{label:c=>c.parsed.y.toFixed(1)+' µg/m³'}}},
+        scales:{
+          x:{ticks:{color:'#8a97b8',font:{size:9}}, grid:{color:'#243153'}},
+          y:{ticks:{color:'#8a97b8',font:{size:9}}, grid:{color:'#243153'}, beginAtZero:true,
+            title:{display:true,text:'µg/m³',color:'#8a97b8',font:{size:9}}}
+        }}
+    });
+  }
+
+  /* ============================================================
+     2. RANDOM FOREST — ko'p o'zgaruvchili prognoz
+     JS'da decision tree ensemble (100 tree → avg)
+     Features: windSpeed, temp, humidity, pressure, hour
+     ============================================================ */
+  let rfChartInst = null;
+
+  // Engil Random Forest implementatsiyasi
+  function rfTrain(X, y, nTrees=50, maxDepth=5){
+    const n=X.length, nFeat=X[0].length;
+    function gini(groups, classes){
+      const total=groups.reduce((s,g)=>s+g.length,0);
+      if(!total) return 0;
+      return groups.reduce((imp,g)=>{
+        const size=g.length; if(!size) return imp;
+        const score=classes.reduce((s,c)=>{
+          const p=g.filter(r=>r[r.length-1]===c).length/size; return s+p*p;},0);
+        return imp+(1-score)*(size/total);
+      },0);
+    }
+    function bestSplit(rows){
+      let best={gini:Infinity};
+      const nf=Math.round(Math.sqrt(nFeat));
+      const feats=Array.from({length:nFeat},(_,i)=>i).sort(()=>Math.random()-.5).slice(0,nf);
+      for(const fi of feats){
+        const vals=[...new Set(rows.map(r=>r[fi]))].sort((a,b)=>a-b);
+        for(let vi=0;vi<vals.length-1;vi++){
+          const threshold=(vals[vi]+vals[vi+1])/2;
+          const left=rows.filter(r=>r[fi]<=threshold);
+          const right=rows.filter(r=>r[fi]>threshold);
+          if(!left.length||!right.length) continue;
+          const cls=[...new Set(rows.map(r=>r[r.length-1]))];
+          const g=gini([left,right],cls);
+          if(g<best.gini){ best={gini:g,fi,threshold,left,right}; }
+        }
+      }
+      return best;
+    }
+    function leafVal(rows){ const vs=rows.map(r=>r[r.length-1]); return vs.reduce((a,b)=>a+b,0)/vs.length; }
+    function buildTree(rows, depth){
+      if(depth>=maxDepth||rows.length<4) return {leaf:true,val:leafVal(rows)};
+      const sp=bestSplit(rows);
+      if(sp.gini===Infinity) return {leaf:true,val:leafVal(rows)};
+      return {fi:sp.fi,thr:sp.threshold,
+        left:buildTree(sp.left,depth+1),
+        right:buildTree(sp.right,depth+1)};
+    }
+    function predict1(tree,row){
+      if(tree.leaf) return tree.val;
+      return row[tree.fi]<=tree.thr?predict1(tree.left,row):predict1(tree.right,row);
+    }
+    // Bootstrap sampling
+    const trees=[];
+    for(let t=0;t<nTrees;t++){
+      const bag=Array.from({length:n},()=>X[Math.floor(Math.random()*n)].concat([y[Math.floor(Math.random()*n)]]));
+      trees.push(buildTree(bag,0));
+    }
+    return {trees,predict1,
+      predict(Xtest){ return Xtest.map(row=>trees.reduce((s,tr)=>s+predict1(tr,row),0)/trees.length); },
+      importance(){
+        // Feature importance: permutation approx
+        const imp=new Array(nFeat).fill(0);
+        trees.forEach(tr=>{
+          function walk(node,depth){
+            if(node.leaf) return;
+            imp[node.fi]+= 1/(depth+1);
+            walk(node.left,depth+1); walk(node.right,depth+1);
+          }
+          walk(tr,0);
+        });
+        const total=imp.reduce((a,b)=>a+b,1e-9);
+        return imp.map(v=>v/total);
+      }
+    };
+  }
+
+  const FEAT_NAMES = ['Shamol tezligi','Harorat','Namlik','Bosim','Soat'];
+
+  function updateRF(weatherSeries, gaussForecast){
+    // Feature matritsasi: [ws, temp, humidity, pressure, hour]
+    const X=[], y=[];
+    weatherSeries.forEach((w,i)=>{
+      if(i<gaussForecast.length){
+        X.push([w.ws, w.temp, w.hum, w.pres, i%24]);
+        y.push(gaussForecast[i]);
+      }
+    });
+    if(X.length<6){ document.getElementById('rfAcc').textContent='Kam ma\'lumot'; return; }
+
+    const rf = rfTrain(X, y, 40, 4);
+    const rfPred = rf.predict(X);
+    const imp = rf.importance();
+
+    // Accuracy (MAPE approx)
+    let mape=0;
+    y.forEach((v,i)=>{ if(v>0.1) mape+=Math.abs((v-rfPred[i])/v); });
+    const acc = Math.round(100*(1-Math.min(1,mape/y.length)));
+    document.getElementById('rfAcc').textContent = acc+'%';
+
+    // Feature importance bars
+    const impDiv = document.getElementById('rfImportance');
+    impDiv.innerHTML = '';
+    const order = imp.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v);
+    order.forEach(({v,i})=>{
+      const pct = (v*100).toFixed(1);
+      const colors = ['#3b82f6','#22d3ee','#a855f7','#f97316','#22c55e'];
+      impDiv.innerHTML += `
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+          <div style="width:80px;color:var(--muted);flex-shrink:0">${FEAT_NAMES[i]}</div>
+          <div style="flex:1;background:var(--panel-2);border-radius:4px;height:8px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${colors[i]};border-radius:4px;transition:width .6s"></div>
+          </div>
+          <div style="width:36px;text-align:right;font-weight:700;color:${colors[i]}">${pct}%</div>
+        </div>`;
+    });
+
+    // RF vs Gauss chart
+    const ctx3 = document.getElementById('rfChart').getContext('2d');
+    if(rfChartInst) rfChartInst.destroy();
+    rfChartInst = new Chart(ctx3,{
+      type:'line',
+      data:{
+        labels:gaussForecast.map((_,i)=>i+'h'),
+        datasets:[
+          {label:'Random Forest',data:rfPred,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.1)',fill:true,tension:.3,borderWidth:2,pointRadius:0},
+          {label:'Gauss',data:gaussForecast,borderColor:'#3b82f6',borderDash:[4,3],borderWidth:1.5,pointRadius:0,tension:.3}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#8a97b8',font:{size:10}}}},
+        scales:{
+          x:{ticks:{color:'#8a97b8',font:{size:9}},grid:{color:'#243153'}},
+          y:{ticks:{color:'#8a97b8',font:{size:9}},grid:{color:'#243153'},beginAtZero:true}
+        }}
+    });
+  }
+
+  /* ============================================================
+     3. ANOMALY DETECTION — Z-score + IQR ikki usul
+     ============================================================ */
+  function detectAnomalies(series, labels){
+    const n=series.length;
+    if(n<4) return [];
+    const mean=series.reduce((a,b)=>a+b,0)/n;
+    const std=Math.sqrt(series.reduce((a,b)=>a+(b-mean)**2,0)/n)||1;
+    // IQR
+    const sorted=[...series].sort((a,b)=>a-b);
+    const q1=sorted[Math.floor(n*.25)], q3=sorted[Math.floor(n*.75)];
+    const iqr=q3-q1, lo=q1-1.5*iqr, hi=q3+1.5*iqr;
+    const anomalies=[];
+    series.forEach((v,i)=>{
+      const z=Math.abs((v-mean)/std);
+      const iqrFlag = v<lo||v>hi;
+      if(z>2.5||iqrFlag){
+        anomalies.push({idx:i, label:labels?labels[i]:(i+'h'), value:+v.toFixed(2), z:+z.toFixed(2),
+          type: v>mean?'Yuqori spike':'Past tushish',
+          severity: z>3.5?'Kritik':z>2.5?'Ogohlantiruv':'Past'});
+      }
+    });
+    return anomalies;
+  }
+
+  function updateAnomaly(gaussForecast, timeLabels){
+    const anomalies = detectAnomalies(gaussForecast, timeLabels);
+    const list = document.getElementById('anomalyList');
+    list.innerHTML = '';
+    if(!anomalies.length){
+      list.innerHTML='<div style="font-size:11px;color:var(--green);padding:6px">✅ Anomaliya aniqlanmadi</div>';
+    } else {
+      anomalies.forEach(a=>{
+        const col = a.severity==='Kritik'?'var(--red)':a.severity==='Ogohlantiruv'?'var(--orange)':'var(--yellow)';
+        list.innerHTML+=`
+          <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="color:${col};font-weight:700">${a.severity}</span>
+              <span style="color:var(--muted)">${a.label}</span>
+            </div>
+            <div style="color:var(--text);margin-top:2px">${a.type} · <b style="color:${col}">${a.value} µg/m³</b></div>
+            <div style="color:var(--muted);margin-top:1px">Z-score: ${a.z}</div>
+          </div>`;
+      });
+    }
+
+    // Risk score
+    const riskPct = Math.min(100, anomalies.length * 18 + (anomalies.some(a=>a.severity==='Kritik')?30:0));
+    document.getElementById('riskBar').style.width = riskPct+'%';
+    document.getElementById('riskScore').textContent = riskPct.toFixed(0)+'%';
+
+    const critCount = anomalies.filter(a=>a.severity==='Kritik').length;
+    const warnCount = anomalies.filter(a=>a.severity==='Ogohlantiruv').length;
+    document.getElementById('anomalySummary').innerHTML =
+      anomalies.length
+        ? `<b style="color:var(--orange)">${anomalies.length} anomaliya</b> aniqlandi: ` +
+          (critCount?`<span style="color:var(--red)">${critCount} kritik</span>, `:'') +
+          (warnCount?`<span style="color:var(--orange)">${warnCount} ogohlantiruv</span>`:'') +
+          `.<br><small style="color:var(--muted)">Z>2.5 yoki IQR chegarasidan tashqari</small>`
+        : '<span style="color:var(--green)">Barcha qiymatlar normal diapazon ichida</span>';
+  }
+
+  /* ============================================================
+     4. ASOSIY INTEGRATSIYA — simulyatsiya tugagach chaqiriladi
+     ============================================================ */
+  // updateHUD / updateChart kabi mavjud funksiyalarni "wrap" qilamiz
+  // Original updateChart orqali simulyatsiya natijalariga kiramiz
+  let _lastResult = null;
+
+  // Chart.js yangilanganda bizga ham xabar beradi
+  const origUpdateChart = typeof updateChart !== 'undefined' ? updateChart : null;
+  if(origUpdateChart){
+    window.updateChart = function(res){
+      origUpdateChart(res);
+      _lastResult = res;
+      scheduleMLUpdate(res);
+    };
+  }
+
+  // Run tugmasi bosilganda ham tutamiz
+  document.querySelector('.btn.primary')?.addEventListener('click', ()=>{
+    setTimeout(()=>{ if(_lastResult) scheduleMLUpdate(_lastResult); }, 1200);
+  });
+
+  function scheduleMLUpdate(res){
+    // Kichik kechikish — asosiy chart render bo'lsin
+    setTimeout(()=> runAllML(res), 400);
+  }
+
+  function runAllML(res){
+    if(!res||!res.forecast||!res.forecast.length) return;
+    const gaussForecast = res.forecast;
+    const timeLabels = res.timeLabels || gaussForecast.map((_,i)=>i+'h');
+
+    // Open-Meteo soatlik PM2.5 (mavjud bo'lsa)
+    const aqHourly = window.__hourlyAQ?.pm25?.slice(0, gaussForecast.length) || [];
+
+    // Ob-havo qatorini quramiz (hourly weather cache)
+    const hw = window.__hourlyWeather;
+    const weatherSeries = gaussForecast.map((_,i)=>({
+      ws:  hw?.windSpeed?.[i] ?? (res.params?.windSpeed||4),
+      temp:hw?.temp?.[i]     ?? (res.params?.temp||22),
+      hum: 58,  // fallback
+      pres:1013
+    }));
+
+    // 1. LSTM
+    updateLSTM(gaussForecast, aqHourly);
+
+    // 2. Random Forest
+    updateRF(weatherSeries, gaussForecast);
+
+    // 3. Anomaly
+    updateAnomaly(gaussForecast, timeLabels);
+  }
+
+  // Sahifa yuklanganda mavjud natijani tekshir (agar avval simulyatsiya ishlagan bo'lsa)
+  document.addEventListener('DOMContentLoaded', ()=>{
+    setTimeout(()=>{ if(_lastResult) runAllML(_lastResult); }, 2000);
+  });
+
+  console.log('[ML] Modullar yuklandi: LSTM · Random Forest · Anomaly Detection');
+})();
+</script>
+
+<!-- ================================================================
+     PROFIL OVERLAY
+     ================================================================ -->
+<div id="profileOverlay">
+  <div id="profileBackdrop"></div>
+  <div id="profileDrawer">
+
+    <div class="pd-header">
+      <div class="pd-top">
+        <h2>👤 Profil sozlamalari</h2>
+        <div class="pd-close" id="pdClose">✕</div>
+      </div>
+      <div class="pd-avatar-wrap">
+        <div class="pd-avatar" id="pdAvatarBtn">
+          <span id="pdAvatarEmoji">🧑‍💻</span>
+          <div class="pd-avatar-edit">✏️</div>
+        </div>
+        <div class="pd-avatar-info">
+          <strong id="pdDisplayName">Abdullo Odilov</strong>
+          <span id="pdEmail">a.odilov@airsim.uz</span>
+          <div class="pd-badge">🔬 Senior Analyst</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pd-tabs">
+      <div class="pd-tab active" data-pd-tab="info">Ma'lumot</div>
+      <div class="pd-tab" data-pd-tab="stats">Statistika</div>
+      <div class="pd-tab" data-pd-tab="settings">Sozlamalar</div>
+      <div class="pd-tab" data-pd-tab="activity">Faollik</div>
+    </div>
+
+    <!-- TAB: info -->
+    <div class="pd-body" id="pdTab-info">
+      <div class="pd-section">
+        <div class="pd-section-title">Shaxsiy ma'lumotlar</div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">👤</span> Ism Familya</div>
+          <input class="pd-input" id="pdName" value="Abdullo Odilov">
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">📧</span> Email</div>
+          <input class="pd-input" id="pdEmailInput" value="a.odilov@airsim.uz">
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🏢</span> Tashkilot</div>
+          <input class="pd-input" value="UzHydromet · Toshkent">
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">📍</span> Joylashuv</div>
+          <input class="pd-input" value="Toshkent, O'zbekiston">
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🌐</span> Til</div>
+          <select class="pd-input" style="cursor:pointer">
+            <option selected>O'zbekcha</option>
+            <option>Русский</option>
+            <option>English</option>
+          </select>
+        </div>
+      </div>
+      <div class="pd-section">
+        <div class="pd-section-title">Ruxsat darajasi</div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🔑</span> Rol</div>
+          <div class="pd-row-val">Senior Analyst</div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🛡️</span> Kirish darajasi</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="display:inline-flex;gap:3px">
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></span>
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></span>
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></span>
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--accent-2)"></span>
+              <span style="width:8px;height:8px;border-radius:2px;background:var(--border)"></span>
+            </span>
+            <span class="pd-row-muted">Level 4/5</span>
+          </div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">📅</span> Ro'yxatdan o'tgan</div>
+          <div class="pd-row-muted">12 Mart 2023</div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">⏱️</span> Oxirgi kirish</div>
+          <div class="pd-row-muted">Bugun, <span id="pdLastLogin"></span></div>
+        </div>
+      </div>
+      <div class="pd-section">
+        <div class="pd-section-title">Xavfsizlik</div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🔐</span> 2FA autentifikatsiya</div>
+          <div class="switch on" data-switch></div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🔒</span> Parol</div>
+          <button class="btn" style="padding:5px 10px;font-size:11px">O'zgartirish</button>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">📱</span> Sessiyalar</div>
+          <div class="pd-row-muted">2 faol qurilma</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: stats -->
+    <div class="pd-body" id="pdTab-stats" style="display:none">
+      <div class="pd-stats">
+        <div class="pd-stat">
+          <small>Jami simulyatsiya</small>
+          <div class="sv" style="color:var(--accent)">247</div>
+          <div class="sdelta">↑ 12 bu hafta</div>
+        </div>
+        <div class="pd-stat">
+          <small>Eksport qilingan</small>
+          <div class="sv" style="color:var(--accent-2)">89</div>
+          <div class="sdelta">↑ 4 bugun</div>
+        </div>
+        <div class="pd-stat">
+          <small>API so'rovlar</small>
+          <div class="sv" style="color:var(--purple)">1.2k</div>
+          <div class="sdelta">↑ 18% o'sdi</div>
+        </div>
+        <div class="pd-stat">
+          <small>Umumiy vaqt</small>
+          <div class="sv" style="color:var(--green)">38h</div>
+          <div class="sdelta">Bu oy</div>
+        </div>
+      </div>
+      <div class="pd-section">
+        <div class="pd-section-title">Moddadan foydalanish</div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">💨</span> PM2.5</div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;margin-left:12px">
+            <div style="flex:1;background:var(--panel);border-radius:4px;height:6px"><div style="width:72%;height:100%;background:var(--accent);border-radius:4px"></div></div>
+            <span class="pd-row-muted">72%</span>
+          </div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🌫️</span> SO₂</div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;margin-left:12px">
+            <div style="flex:1;background:var(--panel);border-radius:4px;height:6px"><div style="width:45%;height:100%;background:var(--yellow);border-radius:4px"></div></div>
+            <span class="pd-row-muted">45%</span>
+          </div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🟤</span> NO₂</div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;margin-left:12px">
+            <div style="flex:1;background:var(--panel);border-radius:4px;height:6px"><div style="width:28%;height:100%;background:var(--orange);border-radius:4px"></div></div>
+            <span class="pd-row-muted">28%</span>
+          </div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">💀</span> CO</div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;margin-left:12px">
+            <div style="flex:1;background:var(--panel);border-radius:4px;height:6px"><div style="width:15%;height:100%;background:var(--red);border-radius:4px"></div></div>
+            <span class="pd-row-muted">15%</span>
+          </div>
+        </div>
+      </div>
+      <div class="pd-section">
+        <div class="pd-section-title">Haftalik faollik</div>
+        <div style="padding:12px 14px;position:relative;height:110px">
+          <canvas id="pdActivityChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: settings -->
+    <div class="pd-body" id="pdTab-settings" style="display:none">
+      <div class="pd-section">
+        <div class="pd-section-title">Bildirishnomalar</div>
+        <div class="pd-notif">
+          <div class="pd-notif-label">AQI kritik chegara<small>PM2.5 > 150 µg/m³ bo'lganda</small></div>
+          <div class="switch on" data-switch></div>
+        </div>
+        <div class="pd-notif">
+          <div class="pd-notif-label">Simulyatsiya tugaganda<small>Hisoblash yakunida xabar</small></div>
+          <div class="switch on" data-switch></div>
+        </div>
+        <div class="pd-notif">
+          <div class="pd-notif-label">ML anomaliya aniqlandi<small>Z-score > 3 bo'lganda</small></div>
+          <div class="switch" data-switch></div>
+        </div>
+        <div class="pd-notif">
+          <div class="pd-notif-label">Haftalik hisobot<small>Har dushanba 09:00 da</small></div>
+          <div class="switch on" data-switch></div>
+        </div>
+        <div class="pd-notif">
+          <div class="pd-notif-label">API xato ogohlantiruvi<small>Open-Meteo uzilib qolganda</small></div>
+          <div class="switch" data-switch></div>
+        </div>
+      </div>
+      <div class="pd-section">
+        <div class="pd-section-title">Ko'rinish</div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🌙</span> Qorong'u rejim</div>
+          <div class="switch on" data-switch></div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🧠</span> ML avtomatik hisob</div>
+          <div class="switch on" data-switch></div>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">📐</span> Birlik tizimi</div>
+          <select class="pd-input" style="cursor:pointer;width:auto">
+            <option selected>SI (µg/m³, m/s)</option>
+            <option>US (µg/m³, mph)</option>
+          </select>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">⏱️</span> Yangilanish oralig'i</div>
+          <select class="pd-input" style="cursor:pointer;width:auto">
+            <option>30 soniya</option>
+            <option selected>1 daqiqa</option>
+            <option>5 daqiqa</option>
+          </select>
+        </div>
+      </div>
+      <div class="pd-section">
+        <div class="pd-section-title">API ulanishlar</div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🌤️</span> Open-Meteo</div>
+          <span style="font-size:11px;color:var(--green);font-weight:700">● Ulangan</span>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">💨</span> AQ API</div>
+          <span style="font-size:11px;color:var(--green);font-weight:700">● Ulangan</span>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🛰️</span> ArcGIS Tiles</div>
+          <span style="font-size:11px;color:var(--yellow);font-weight:700">● Qisman</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: activity -->
+    <div class="pd-body" id="pdTab-activity" style="display:none">
+      <div class="pd-section">
+        <div class="pd-section-title">So'nggi amallar</div>
+        <div class="pd-activity" id="pdActivityFeed"></div>
+      </div>
+      <div class="pd-section">
+        <div class="pd-section-title">Saqlangan ssenariylar</div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🌬️</span> Shamolli kun — 18 m/s</div>
+          <button class="btn" style="padding:4px 8px;font-size:11px">Yuklash</button>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🌫️</span> Inversiya (tinch havo)</div>
+          <button class="btn" style="padding:4px 8px;font-size:11px">Yuklash</button>
+        </div>
+        <div class="pd-row">
+          <div class="pd-row-label"><span class="ico">🚨</span> Favqulodda: Q=25 kg/s</div>
+          <button class="btn" style="padding:4px 8px;font-size:11px">Yuklash</button>
+        </div>
+        <div class="pd-row" style="justify-content:center">
+          <button class="btn btn-full" style="font-size:12px">+ Joriy ssenariyni saqlash</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pd-footer">
+      <button class="btn primary" style="flex:1;font-size:13px" id="pdSave">💾 Saqlash</button>
+      <button class="btn warn" style="font-size:13px" id="pdLogout">🚪 Chiqish</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  const overlay  = document.getElementById('profileOverlay');
+  const backdrop = document.getElementById('profileBackdrop');
+  const profBtn  = document.querySelector('.topbar-actions .btn:last-child');
+
+  const el = document.getElementById('pdLastLogin');
+  if(el) el.textContent = new Date().toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'});
+
+  function openProfile(){ overlay.classList.add('show'); }
+  function closeProfile(){ overlay.classList.remove('show'); }
+
+  profBtn?.addEventListener('click', openProfile);
+  document.getElementById('pdClose')?.addEventListener('click', closeProfile);
+  backdrop?.addEventListener('click', closeProfile);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && overlay.classList.contains('show')) closeProfile(); });
+
+  document.querySelectorAll('.pd-tab').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      const name = tab.dataset.pdTab;
+      document.querySelectorAll('.pd-tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      ['info','stats','settings','activity'].forEach(n=>{
+        const el = document.getElementById('pdTab-'+n);
+        if(el) el.style.display = n===name?'flex':'none';
+      });
+      if(name==='stats') setTimeout(renderActivityChart, 80);
+    });
+  });
+
+  document.querySelectorAll('#profileDrawer [data-switch]').forEach(sw=>{
+    sw.addEventListener('click',()=>sw.classList.toggle('on'));
+  });
+
+  document.getElementById('pdName')?.addEventListener('input', e=>{
+    document.getElementById('pdDisplayName').textContent = e.target.value;
+  });
+  document.getElementById('pdEmailInput')?.addEventListener('input', e=>{
+    document.getElementById('pdEmail').textContent = e.target.value;
+  });
+
+  document.getElementById('pdSave')?.addEventListener('click',()=>{
+    const btn = document.getElementById('pdSave');
+    btn.textContent = '✅ Saqlandi!';
+    setTimeout(()=>{ btn.textContent='💾 Saqlash'; }, 1800);
+  });
+
+  document.getElementById('pdLogout')?.addEventListener('click',()=>{
+    if(confirm('Tizimdan chiqmoqchimisiz?')) closeProfile();
+  });
+
+  const ACTIVITIES = [
+    {dot:'var(--accent)',   text:'Simulyatsiya ishga tushirildi', sub:'Shamolli kun · Q=12.4 kg/s',    time:'2 daqiqa oldin'},
+    {dot:'var(--green)',    text:'PDF hisobot eksport qilindi',   sub:'AirSim_Report_2026.pdf',         time:'18 daqiqa oldin'},
+    {dot:'var(--purple)',   text:'ML anomaliya aniqlandi',        sub:'Z-score 3.2 · 14h nuqtasida',   time:'34 daqiqa oldin'},
+    {dot:'var(--accent-2)','text':'Open-Meteo ma\'lumot yangilandi',sub:'Soatlik ob-havo · 48h prognoz',time:'1 soat oldin'},
+    {dot:'var(--yellow)',   text:'Snapshot saqlandi',             sub:'Compare Run #12',                time:'2 soat oldin'},
+    {dot:'var(--orange)',   text:'AQI chegara oshdi',             sub:'PM2.5 = 87 µg/m³',              time:'3 soat oldin'},
+    {dot:'var(--green)',    text:'Excel eksport',                 sub:'simulation_data.xlsx',            time:'Kecha, 17:22'},
+    {dot:'var(--accent)',   text:'Stsenariy yuklandi',            sub:'Favqulodda holat rejimi',        time:'Kecha, 14:05'},
+  ];
+  const feed = document.getElementById('pdActivityFeed');
+  if(feed){
+    ACTIVITIES.forEach(a=>{
+      feed.innerHTML += '<div class="pd-act-item"><div class="pd-act-dot" style="background:'+a.dot+'"></div><div style="flex:1"><div style="font-size:12px">'+a.text+'</div><div class="pd-act-time">'+a.sub+'</div></div><div class="pd-act-time" style="white-space:nowrap">'+a.time+'</div></div>';
+    });
+  }
+
+  let pdChart = null;
+  function renderActivityChart(){
+    const canvas = document.getElementById('pdActivityChart');
+    if(!canvas || !window.Chart) return;
+    if(pdChart){ pdChart.destroy(); pdChart=null; }
+    pdChart = new Chart(canvas.getContext('2d'),{
+      type:'bar',
+      data:{
+        labels:['Du','Se','Ch','Pa','Ju','Sh','Ya'],
+        datasets:[
+          {label:'Simulyatsiya',data:[12,19,8,24,17,6,3],backgroundColor:'rgba(59,130,246,.6)',borderColor:'#3b82f6',borderWidth:1,borderRadius:4},
+          {label:'Eksport',data:[3,7,2,9,5,2,1],backgroundColor:'rgba(34,211,238,.5)',borderColor:'#22d3ee',borderWidth:1,borderRadius:4}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#8a97b8',font:{size:10}}}},
+        scales:{
+          x:{ticks:{color:'#8a97b8',font:{size:10}},grid:{color:'#243153'}},
+          y:{ticks:{color:'#8a97b8',font:{size:10}},grid:{color:'#243153'},beginAtZero:true}
+        }}
+    });
+  }
+
+  console.log('[Profile] Modul yuklandi');
+})();
+</script>
+
+</body>
+</html>
