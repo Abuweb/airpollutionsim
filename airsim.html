@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AirSim — Kirish</title>
+<style>
+:root{
+  --bg:#0b1220;--panel:#121a2e;--panel-2:#1a2540;--border:#243153;
+  --text:#e6ecf7;--muted:#8a97b8;--accent:#3b82f6;--accent-2:#22d3ee;
+  --green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--purple:#a855f7;
+  --radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,Segoe UI,Roboto,Inter,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh;display:flex;flex-direction:column}
+
+/* ── Background particles ── */
+.bg-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+/* ── Layout ── */
+.auth-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;position:relative;z-index:1}
+.auth-split{display:grid;grid-template-columns:1fr 1fr;gap:0;max-width:960px;width:100%;background:var(--panel);border:1px solid var(--border);border-radius:20px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6)}
+@media(max-width:720px){.auth-split{grid-template-columns:1fr}.auth-left{display:none}}
+
+/* ── Left promo panel ── */
+.auth-left{background:linear-gradient(160deg,#0f1e3d 0%,#0b1220 60%);padding:48px 40px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.auth-left::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(ellipse at 20% 20%,rgba(59,130,246,.18),transparent 50%),
+  radial-gradient(ellipse at 80% 80%,rgba(34,211,238,.12),transparent 50%)}
+.auth-left .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;position:relative}
+.auth-left .logo-dot{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:16px}
+.auth-left .tagline{position:relative}
+.auth-left .tagline h2{font-size:28px;font-weight:800;line-height:1.25;margin-bottom:12px;background:linear-gradient(120deg,#e6ecf7,var(--accent-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.auth-left .tagline p{color:var(--muted);font-size:13px;line-height:1.7}
+.auth-left .features{display:flex;flex-direction:column;gap:10px;position:relative}
+.auth-left .feat{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.auth-left .feat span.icon{width:28px;height:28px;border-radius:8px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.2);display:grid;place-items:center;font-size:14px;flex-shrink:0}
+
+/* Floating map preview */
+.map-preview{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border);height:120px;background:
+  radial-gradient(circle at 30% 50%,rgba(239,68,68,.5),transparent 25%),
+  radial-gradient(circle at 55% 55%,rgba(234,179,8,.3),transparent 35%),
+  radial-gradient(circle at 75% 45%,rgba(34,197,94,.2),transparent 40%),
+  linear-gradient(135deg,#0d1628,#1a2540);margin-bottom:16px}
+.map-preview::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:24px 24px}
+.map-dot{position:absolute;left:30%;top:50%;width:10px;height:10px;background:var(--red);border-radius:50%;box-shadow:0 0 12px var(--red);transform:translate(-50%,-50%);animation:pulse-dot 1.6s infinite}
+@keyframes pulse-dot{0%,100%{box-shadow:0 0 12px var(--red)}50%{box-shadow:0 0 24px var(--red),0 0 40px rgba(239,68,68,.4)}}
+.map-preview-label{position:absolute;bottom:8px;left:8px;font-size:10px;color:var(--muted);background:rgba(11,18,32,.8);padding:2px 7px;border-radius:4px;backdrop-filter:blur(4px)}
+
+/* ── Right form panel ── */
+.auth-right{padding:40px 40px;display:flex;flex-direction:column;justify-content:center;gap:0}
+
+/* Step indicator */
+.step-bar{display:flex;align-items:center;gap:6px;margin-bottom:28px}
+.step-dot{width:28px;height:6px;border-radius:3px;background:var(--border);transition:.3s}
+.step-dot.done{background:var(--accent)}
+.step-dot.active{background:var(--accent-2);width:40px}
+.step-label{font-size:11px;color:var(--muted);margin-left:4px}
+
+/* Tabs (login / register) */
+.auth-tabs{display:flex;gap:0;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:24px}
+.auth-tab{flex:1;padding:9px;font-size:13px;border-radius:8px;cursor:pointer;color:var(--muted);text-align:center;font-weight:600;transition:.15s}
+.auth-tab.active{background:var(--accent);color:#fff;box-shadow:0 2px 12px rgba(59,130,246,.3)}
+
+/* Form */
+.form-title{font-size:20px;font-weight:800;margin-bottom:4px}
+.form-sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+
+.f-group{margin-bottom:14px;position:relative}
+.f-group label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.f-input{width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:11px 14px;color:var(--text);font-size:13px;outline:none;transition:.15s;font-family:inherit}
+.f-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+.f-input.error{border-color:var(--red);box-shadow:0 0 0 3px rgba(239,68,68,.1)}
+.f-input.success{border-color:var(--green)}
+.f-input::placeholder{color:var(--muted)}
+.f-hint{font-size:11px;margin-top:4px}
+.f-hint.err{color:var(--red)}
+.f-hint.ok{color:var(--green)}
+
+/* Password eye */
+.f-eye{position:absolute;right:12px;bottom:11px;cursor:pointer;color:var(--muted);font-size:16px;user-select:none}
+.f-eye:hover{color:var(--text)}
+
+/* Password strength */
+.pw-strength{display:flex;gap:4px;margin-top:6px}
+.pw-bar{flex:1;height:3px;border-radius:2px;background:var(--border);transition:.3s}
+.pw-bar.weak{background:var(--red)}
+.pw-bar.mid{background:var(--yellow)}
+.pw-bar.strong{background:var(--green)}
+.pw-label{font-size:10px;color:var(--muted);margin-top:3px}
+
+/* Row */
+.f-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* Select styled */
+.f-select{width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;padding:11px 14px;color:var(--text);font-size:13px;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a97b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.f-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+.f-select option{background:var(--panel-2)}
+
+/* Checkbox */
+.f-check{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:12px;color:var(--muted);margin-bottom:14px}
+.f-check input{display:none}
+.f-checkmark{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--border);background:var(--panel-2);display:grid;place-items:center;flex-shrink:0;transition:.15s;margin-top:1px}
+.f-check input:checked ~ .f-checkmark{background:var(--accent);border-color:var(--accent)}
+.f-check input:checked ~ .f-checkmark::after{content:"✓";font-size:11px;color:#fff;font-weight:700}
+.f-check a{color:var(--accent);text-decoration:underline}
+
+/* Submit */
+.f-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--accent),var(--accent-2));border:none;border-radius:9px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:.2s;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit}
+.f-btn:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 6px 24px rgba(59,130,246,.35)}
+.f-btn:active{transform:translateY(0)}
+.f-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.f-btn.loading::after{content:"";width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Divider */
+.f-divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--muted);font-size:11px}
+.f-divider::before,.f-divider::after{content:"";flex:1;height:1px;background:var(--border)}
+
+/* Social btns */
+.f-social{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.f-social-btn{padding:10px;background:var(--panel-2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s;font-family:inherit}
+.f-social-btn:hover{border-color:var(--accent);background:rgba(59,130,246,.05)}
+
+/* Forgot */
+.f-forgot{font-size:12px;color:var(--accent);cursor:pointer;text-align:right;margin-top:-8px;margin-bottom:12px;display:block}
+.f-forgot:hover{text-decoration:underline}
+
+/* Onboarding avatar picker */
+.avatar-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:8px 0 4px}
+.av-opt{width:100%;aspect-ratio:1;border-radius:10px;border:2px solid var(--border);background:var(--panel-2);display:grid;place-items:center;font-size:22px;cursor:pointer;transition:.15s}
+.av-opt:hover{border-color:var(--accent-2)}
+.av-opt.selected{border-color:var(--accent);background:rgba(59,130,246,.12);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+
+/* Role cards */
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px}
+.role-card{padding:12px;background:var(--panel-2);border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:.15s}
+.role-card:hover{border-color:var(--accent-2)}
+.role-card.selected{border-color:var(--accent);background:rgba(59,130,246,.08)}
+.role-card .rc-icon{font-size:20px;margin-bottom:6px}
+.role-card .rc-name{font-size:12px;font-weight:700}
+.role-card .rc-desc{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* Progress steps (onboarding) */
+.ob-steps{display:flex;justify-content:space-between;margin-bottom:24px;position:relative}
+.ob-steps::before{content:"";position:absolute;top:14px;left:14px;right:14px;height:1px;background:var(--border)}
+.ob-step{display:flex;flex-direction:column;align-items:center;gap:6px;z-index:1}
+.ob-step .os-dot{width:28px;height:28px;border-radius:50%;background:var(--panel-2);border:2px solid var(--border);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--muted);transition:.3s}
+.ob-step.active .os-dot{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 0 4px rgba(59,130,246,.2)}
+.ob-step.done .os-dot{background:var(--green);border-color:var(--green);color:#fff}
+.ob-step .os-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.ob-step.active .os-label{color:var(--accent)}
+.ob-step.done .os-label{color:var(--green)}
+
+/* Success screen */
+.success-screen{text-align:center;padding:20px 0}
+.success-icon{width:72px;height:72px;border-radius:50%;background:rgba(34,197,94,.12);border:2px solid rgba(34,197,94,.3);display:grid;place-items:center;font-size:32px;margin:0 auto 16px;animation:pop .4s ease}
+@keyframes pop{0%{transform:scale(.6);opacity:0}80%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+.success-screen h3{font-size:20px;font-weight:800;margin-bottom:6px}
+.success-screen p{font-size:13px;color:var(--muted);line-height:1.6}
+
+/* Footer link */
+.auth-switch{text-align:center;margin-top:16px;font-size:12px;color:var(--muted)}
+.auth-switch a{color:var(--accent);cursor:pointer;font-weight:600}
+.auth-switch a:hover{text-decoration:underline}
+
+/* Topbar */
+.auth-topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;position:relative;z-index:1}
+.auth-topbar .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+.auth-topbar .brand-dot{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:14px}
+.auth-topbar .go-dash{font-size:12px;color:var(--muted);padding:6px 12px;border:1px solid var(--border);border-radius:999px;cursor:pointer;transition:.15s;background:transparent;font-family:inherit}
+.auth-topbar .go-dash:hover{border-color:var(--accent);color:var(--text)}
+</style>
+</head>
+<body>
+
+<canvas class="bg-canvas" id="bgCanvas"></canvas>
+
+<!-- Topbar -->
+<header class="auth-topbar">
+  <div class="brand">
+    <div class="brand-dot">⚡</div>
+    AirSim
+  </div>
+  <button class="go-dash" onclick="skipToDashboard()">← Dashboardga o'tish (demo)</button>
+</header>
+
+<!-- Main -->
+<div class="auth-wrap">
+  <div class="auth-split">
+
+    <!-- LEFT: Promo -->
+    <div class="auth-left">
+      <div class="logo">
+        <div class="logo-dot">⚡</div>
+        AirSim Platform
+      </div>
+
+      <div class="tagline">
+        <div class="map-preview">
+          <div class="map-dot"></div>
+          <div class="map-preview-label">IES · Toshkent · Real-time</div>
+        </div>
+        <h2>Atmosfera tahlilining kelajagi</h2>
+        <p>Gauss dispersiya modeli, ML prognoz va real-time meteorologik ma'lumotlar birlashgan yagona platforma.</p>
+      </div>
+
+      <div class="features">
+        <div class="feat"><span class="icon">🌬️</span> Real-time Open-Meteo API ulanish</div>
+        <div class="feat"><span class="icon">🧠</span> LSTM · Random Forest · Anomaliya ML</div>
+        <div class="feat"><span class="icon">🗺️</span> Leaflet xarita + 3D vizualizatsiya</div>
+        <div class="feat"><span class="icon">📊</span> PDF · Excel · CSV eksport</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Forms -->
+    <div class="auth-right" id="authRight">
+      <!-- injected by JS -->
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ===================================================
+   AUTH APP STATE
+   =================================================== */
+const state = {
+  view: 'login',      // login | register | onboarding | success
+  obStep: 1,          // 1: profil | 2: rol | 3: sozlamalar
+  avatar: '🧑‍💻',
+  role: '',
+  pwVisible: false,
+  pw2Visible: false,
+  userData: {
+    name: 'Abdullo Odilov',
+    email: '',
+    phone: '',
+    org: '',
+    city: '',
+    role: '',
+    avatar: '🧑‍💻',
+    lang: 'uz',
+    notif: true
+  }
+};
+
+const root = document.getElementById('authRight');
+
+function render(){
+  if(state.view === 'login')       renderLogin();
+  else if(state.view === 'register') renderRegister();
+  else if(state.view === 'onboarding') renderOnboarding();
+  else if(state.view === 'success')  renderSuccess();
+}
+
+/* ───────────── LOGIN ───────────── */
+function renderLogin(){
+  root.innerHTML = `
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchTab('login')">Kirish</div>
+      <div class="auth-tab" onclick="switchTab('register')">Ro'yxatdan o'tish</div>
+    </div>
+
+    <div class="form-title">Xush kelibsiz 👋</div>
+    <div class="form-sub">Hisobingizga kiring</div>
+
+    <div class="f-social">
+      <button class="f-social-btn" onclick="socialLogin('Google')">
+        <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Google
+      </button>
+      <button class="f-social-btn" onclick="socialLogin('GitHub')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+        GitHub
+      </button>
+    </div>
+
+    <div class="f-divider">yoki email bilan</div>
+
+    <div class="f-group">
+      <label>Email manzil</label>
+      <input class="f-input" id="loginEmail" type="email" placeholder="siz@example.com" value="${state.userData.email}">
+    </div>
+
+    <div class="f-group" style="position:relative">
+      <label>Parol</label>
+      <input class="f-input" id="loginPw" type="password" placeholder="••••••••">
+      <span class="f-eye" onclick="togglePw('loginPw',this)">👁</span>
+    </div>
+
+    <a class="f-forgot" onclick="showForgot()">Parolni unutdingizmi?</a>
+
+    <label class="f-check">
+      <input type="checkbox" id="rememberMe" checked>
+      <span class="f-checkmark"></span>
+      <span>Meni eslab qol (30 kun)</span>
+    </label>
+
+    <button class="f-btn" id="loginBtn" onclick="doLogin()">
+      <span>Kirish</span>
+    </button>
+
+    <div class="auth-switch">Hisob yo'qmi? <a onclick="switchTab('register')">Ro'yxatdan o'ting</a></div>
+  `;
+  setupInputValidation();
+}
+
+/* ───────────── REGISTER ───────────── */
+function renderRegister(){
+  root.innerHTML = `
+    <div class="auth-tabs">
+      <div class="auth-tab" onclick="switchTab('login')">Kirish</div>
+      <div class="auth-tab active" onclick="switchTab('register')">Ro'yxatdan o'tish</div>
+    </div>
+
+    <div class="form-title">Hisob yarating ✨</div>
+    <div class="form-sub">Bepul, kalit kartochkasiz</div>
+
+    <div class="f-row">
+      <div class="f-group">
+        <label>Ism</label>
+        <input class="f-input" id="regFirst" type="text" placeholder="Abdullo" value="Abdullo">
+      </div>
+      <div class="f-group">
+        <label>Familya</label>
+        <input class="f-input" id="regLast" type="text" placeholder="Odilov" value="Odilov">
+      </div>
+    </div>
+
+    <div class="f-group">
+      <label>Email manzil</label>
+      <input class="f-input" id="regEmail" type="email" placeholder="siz@example.com" oninput="validateEmail(this)">
+      <div class="f-hint" id="emailHint"></div>
+    </div>
+
+    <div class="f-group" style="position:relative">
+      <label>Parol</label>
+      <input class="f-input" id="regPw" type="password" placeholder="Kamida 8 ta belgi" oninput="checkStrength(this.value)">
+      <span class="f-eye" onclick="togglePw('regPw',this)">👁</span>
+      <div class="pw-strength" id="pwBars">
+        <div class="pw-bar" id="pb1"></div>
+        <div class="pw-bar" id="pb2"></div>
+        <div class="pw-bar" id="pb3"></div>
+        <div class="pw-bar" id="pb4"></div>
+      </div>
+      <div class="pw-label" id="pwLabel">Parolni kiriting</div>
+    </div>
+
+    <div class="f-group" style="position:relative">
+      <label>Parolni tasdiqlang</label>
+      <input class="f-input" id="regPw2" type="password" placeholder="••••••••" oninput="checkPw2(this.value)">
+      <span class="f-eye" onclick="togglePw('regPw2',this)">👁</span>
+      <div class="f-hint" id="pw2Hint"></div>
+    </div>
+
+    <div class="f-group">
+      <label>Telefon (ixtiyoriy)</label>
+      <input class="f-input" id="regPhone" type="tel" placeholder="+998 90 123 45 67">
+    </div>
+
+    <label class="f-check">
+      <input type="checkbox" id="agreeTerms">
+      <span class="f-checkmark"></span>
+      <span><a href="#">Foydalanish shartlari</a> va <a href="#">Maxfiylik siyosati</a>ga roziman</span>
+    </label>
+
+    <button class="f-btn" id="regBtn" onclick="doRegister()">
+      <span>Hisob yaratish</span>
+    </button>
+
+    <div class="auth-switch">Allaqachon hisobingiz bormi? <a onclick="switchTab('login')">Kiring</a></div>
+  `;
+}
+
+/* ───────────── ONBOARDING ───────────── */
+function renderOnboarding(){
+  const steps = [
+    {n:1, label:'Profil'},
+    {n:2, label:'Rol'},
+    {n:3, label:'Sozlama'}
+  ];
+
+  const stepsHTML = steps.map(s=>`
+    <div class="ob-step ${state.obStep > s.n ? 'done' : state.obStep === s.n ? 'active' : ''}">
+      <div class="os-dot">${state.obStep > s.n ? '✓' : s.n}</div>
+      <div class="os-label">${s.label}</div>
+    </div>`).join('');
+
+  let bodyHTML = '';
+
+  if(state.obStep === 1){
+    bodyHTML = `
+      <div class="form-title">Profilingizni sozlang 🎨</div>
+      <div class="form-sub">Bu ma'lumotlar boshqa foydalanuvchilarga ko'rsatiladi</div>
+
+      <div class="f-group">
+        <label>Avatar tanlang</label>
+        <div class="avatar-grid" id="avatarGrid">
+          ${['🧑‍💻','👩‍🔬','🧑‍🏫','👨‍💼','👩‍💼','🧑‍🔬','👨‍🔬','👩‍🏫','🧑‍💼','🤖','🌍','⚡'].map(em=>`
+            <div class="av-opt ${state.avatar===em?'selected':''}" onclick="selectAvatar('${em}',this)">${em}</div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="f-row">
+        <div class="f-group">
+          <label>Ism</label>
+          <input class="f-input" id="obFirst" type="text" value="Abdullo">
+        </div>
+        <div class="f-group">
+          <label>Familya</label>
+          <input class="f-input" id="obLast" type="text" value="Odilov">
+        </div>
+      </div>
+
+      <div class="f-group">
+        <label>Tashkilot / Muassasa</label>
+        <input class="f-input" id="obOrg" type="text" placeholder="UzHydromet, MCHJ, Universitet...">
+      </div>
+
+      <div class="f-row">
+        <div class="f-group">
+          <label>Shahar</label>
+          <select class="f-select" id="obCity">
+            <option value="">Tanlang...</option>
+            <option value="tashkent" selected>Toshkent</option>
+            <option value="samarkand">Samarqand</option>
+            <option value="namangan">Namangan</option>
+            <option value="andijan">Andijon</option>
+            <option value="bukhara">Buxoro</option>
+            <option value="nukus">Nukus</option>
+            <option value="other">Boshqa</option>
+          </select>
+        </div>
+        <div class="f-group">
+          <label>Til</label>
+          <select class="f-select" id="obLang">
+            <option value="uz" selected>O'zbekcha</option>
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="f-btn" onclick="obNext()">Davom etish →</button>
+    `;
+  }
+
+  else if(state.obStep === 2){
+    const roles = [
+      {id:'analyst',   icon:'🔬', name:'Tahlilchi',      desc:'Havoni tahlil qilish va hisobot'},
+      {id:'engineer',  icon:'⚙️', name:'Muhandis',       desc:'Texnik modellashtirish'},
+      {id:'scientist', icon:'🧪', name:'Tadqiqotchi',    desc:'Ilmiy tadqiqot va ML'},
+      {id:'manager',   icon:'📋', name:'Menejer',        desc:'Hisobot va nazorat'},
+      {id:'student',   icon:'🎓', name:'Talaba',         desc:'O\'quv maqsadlari'},
+      {id:'other',     icon:'🌐', name:'Boshqa',         desc:'Umumiy foydalanish'},
+    ];
+    bodyHTML = `
+      <div class="form-title">Rolingizni tanlang 🎯</div>
+      <div class="form-sub">Bu sizga mos imkoniyatlarni ochadi</div>
+
+      <div class="role-grid" id="roleGrid">
+        ${roles.map(r=>`
+          <div class="role-card ${state.role===r.id?'selected':''}" onclick="selectRole('${r.id}',this)">
+            <div class="rc-icon">${r.icon}</div>
+            <div class="rc-name">${r.name}</div>
+            <div class="rc-desc">${r.desc}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div id="roleHint" style="font-size:11px;color:var(--muted);margin:8px 0 14px;min-height:16px"></div>
+
+      <div style="display:flex;gap:8px">
+        <button class="f-btn" style="background:var(--panel-2);border:1px solid var(--border);color:var(--text);flex:none;width:100px" onclick="obBack()">← Orqaga</button>
+        <button class="f-btn" onclick="obNext()">Davom etish →</button>
+      </div>
+    `;
+  }
+
+  else if(state.obStep === 3){
+    bodyHTML = `
+      <div class="form-title">Xabarnomalar 🔔</div>
+      <div class="form-sub">Qaysi hodisalar haqida xabardor bo'lmoqchisiz?</div>
+
+      <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px">
+        ${[
+          {id:'n1', label:'AQI kritik chegara',    desc:'PM2.5 > 150 µg/m³',             def:true},
+          {id:'n2', label:'Simulyatsiya tugadi',   desc:'Hisoblash yakunida xabar',       def:true},
+          {id:'n3', label:'ML anomaliya',          desc:'Z-score > 3 da ogohlantirish',   def:false},
+          {id:'n4', label:'Haftalik hisobot',      desc:'Har dushanba 09:00 da',          def:true},
+          {id:'n5', label:'API xatolik',           desc:'Open-Meteo ulanmasa',            def:false},
+        ].map((n,i,arr)=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;${i<arr.length-1?'border-bottom:1px solid var(--border)':''}">
+            <div>
+              <div style="font-size:13px">${n.label}</div>
+              <div style="font-size:11px;color:var(--muted)">${n.desc}</div>
+            </div>
+            <div class="switch ${n.def?'on':''}" data-switch onclick="this.classList.toggle('on')"></div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="f-group">
+        <label>Qo'shimcha izoh (ixtiyoriy)</label>
+        <textarea class="f-input" placeholder="Platformadan nima kutasiz?" style="resize:none;height:70px;line-height:1.5"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="f-btn" style="background:var(--panel-2);border:1px solid var(--border);color:var(--text);flex:none;width:100px" onclick="obBack()">← Orqaga</button>
+        <button class="f-btn" onclick="obFinish()">✅ Tamomlash</button>
+      </div>
+    `;
+  }
+
+  root.innerHTML = `
+    <div class="ob-steps">${stepsHTML}</div>
+    ${bodyHTML}
+  `;
+}
+
+/* ───────────── SUCCESS ───────────── */
+function renderSuccess(){
+  root.innerHTML = `
+    <div class="success-screen">
+      <div class="success-icon">✅</div>
+      <h3>Xush kelibsiz, ${state.userData.name}!</h3>
+      <p style="margin-bottom:20px">Hisobingiz muvaffaqiyatli yaratildi.<br>Endi AirSim platformasining barcha imkoniyatlaridan foydalanishingiz mumkin.</p>
+
+      <div style="background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:left;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-size:22px">${state.userData.avatar}</div>
+          <div>
+            <div style="font-weight:700">${state.userData.name}</div>
+            <div style="font-size:12px;color:var(--muted)">${state.userData.email || 'a.odilov@airsim.uz'}</div>
+            <div style="font-size:10px;margin-top:2px;color:var(--accent)">${roleLabel(state.userData.role)}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
+          <div style="padding:7px 10px;background:var(--panel);border-radius:7px;color:var(--muted)">🏢 ${state.userData.org || 'Ko\'rsatilmagan'}</div>
+          <div style="padding:7px 10px;background:var(--panel);border-radius:7px;color:var(--muted)">📍 ${cityLabel(state.userData.city)}</div>
+        </div>
+      </div>
+
+      <button class="f-btn" onclick="goDashboard()" style="margin-bottom:10px">
+        🚀 Dashboardga o'tish
+      </button>
+      <div style="font-size:11px;color:var(--muted)">Profilingizni istalgan vaqt sozlashingiz mumkin</div>
+    </div>
+  `;
+}
+
+/* ───────────── ACTIONS ───────────── */
+function switchTab(tab){
+  state.view = tab;
+  render();
+}
+
+function togglePw(id, el){
+  const inp = document.getElementById(id);
+  const isText = inp.type === 'text';
+  inp.type = isText ? 'password' : 'text';
+  el.textContent = isText ? '👁' : '🙈';
+}
+
+function validateEmail(inp){
+  const v = inp.value;
+  const hint = document.getElementById('emailHint');
+  if(!v){ hint.textContent=''; return; }
+  const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  inp.className = 'f-input ' + (ok ? 'success' : 'error');
+  hint.className = 'f-hint ' + (ok ? 'ok' : 'err');
+  hint.textContent = ok ? '✓ To\'g\'ri format' : 'Noto\'g\'ri email format';
+}
+
+function checkStrength(pw){
+  const bars = [document.getElementById('pb1'),document.getElementById('pb2'),document.getElementById('pb3'),document.getElementById('pb4')];
+  const lbl = document.getElementById('pwLabel');
+  if(!pw){ bars.forEach(b=>b.className='pw-bar'); lbl.textContent='Parolni kiriting'; return; }
+  let score = 0;
+  if(pw.length >= 8) score++;
+  if(/[A-Z]/.test(pw)) score++;
+  if(/[0-9]/.test(pw)) score++;
+  if(/[^A-Za-z0-9]/.test(pw)) score++;
+  const cls = score<=1?'weak':score<=2?'mid':'strong';
+  const labels = ['','Juda zaif','Zaif','O\'rtacha','Kuchli 💪'];
+  bars.forEach((b,i)=>{ b.className = 'pw-bar ' + (i < score ? cls : ''); });
+  lbl.textContent = labels[score] || '';
+  lbl.style.color = score<=1?'var(--red)':score<=2?'var(--yellow)':'var(--green)';
+}
+
+function checkPw2(v){
+  const pw1 = document.getElementById('regPw')?.value;
+  const hint = document.getElementById('pw2Hint');
+  const inp = document.getElementById('regPw2');
+  if(!v){ hint.textContent=''; return; }
+  if(v === pw1){ inp.className='f-input success'; hint.className='f-hint ok'; hint.textContent='✓ Parollar mos'; }
+  else{ inp.className='f-input error'; hint.className='f-hint err'; hint.textContent='Parollar mos emas'; }
+}
+
+function selectAvatar(em, el){
+  state.avatar = em;
+  document.querySelectorAll('.av-opt').forEach(a=>a.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function selectRole(id, el){
+  state.role = id;
+  document.querySelectorAll('.role-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  const descs = {
+    analyst:'Siz havoni tahlil qilish va hisobot yaratish uchun optimallashtirilgan ko\'rinishni olasiz.',
+    engineer:'Texnik parametrlar va model sozlamalari ko\'proq ko\'rsatiladi.',
+    scientist:'ML modullari va ilmiy eksport imkoniyatlari kengayadi.',
+    manager:'Umumiy ko\'rinish va hisobot vositalari ustuvor bo\'ladi.',
+    student:'O\'quv qo\'llanmalar va oddiy rejim yoqiladi.',
+    other:'Standart rejim faollashadi.'
+  };
+  const hint = document.getElementById('roleHint');
+  if(hint) hint.textContent = descs[id] || '';
+}
+
+function doLogin(){
+  const email = document.getElementById('loginEmail')?.value;
+  const pw    = document.getElementById('loginPw')?.value;
+  if(!email || !pw){ alert('Email va parolni kiriting'); return; }
+  const btn = document.getElementById('loginBtn');
+  btn.classList.add('loading');
+  btn.querySelector('span').textContent = 'Tekshirilmoqda...';
+  btn.disabled = true;
+  setTimeout(()=>{
+    state.userData.email = email;
+    state.userData.name = 'Abdullo Odilov';
+    state.view = 'success';
+    render();
+  }, 1400);
+}
+
+function doRegister(){
+  const first = document.getElementById('regFirst')?.value;
+  const last  = document.getElementById('regLast')?.value;
+  const email = document.getElementById('regEmail')?.value;
+  const pw    = document.getElementById('regPw')?.value;
+  const pw2   = document.getElementById('regPw2')?.value;
+  const terms = document.getElementById('agreeTerms')?.checked;
+  if(!first||!last){ alert('Ism va familyangizni kiriting'); return; }
+  if(!email||!/\S+@\S+\.\S+/.test(email)){ alert('To\'g\'ri email kiriting'); return; }
+  if(!pw||pw.length<8){ alert('Parol kamida 8 ta belgi bo\'lishi kerak'); return; }
+  if(pw!==pw2){ alert('Parollar mos emas'); return; }
+  if(!terms){ alert('Foydalanish shartlariga rozilik bering'); return; }
+  const btn = document.getElementById('regBtn');
+  btn.classList.add('loading');
+  btn.querySelector('span').textContent = 'Yaratilmoqda...';
+  btn.disabled = true;
+  setTimeout(()=>{
+    state.userData.name  = first + ' ' + last;
+    state.userData.email = email;
+    state.userData.phone = document.getElementById('regPhone')?.value || '';
+    state.view = 'onboarding';
+    state.obStep = 1;
+    render();
+  }, 1200);
+}
+
+function obNext(){
+  if(state.obStep === 1){
+    const first = document.getElementById('obFirst')?.value || 'Abdullo';
+    const last  = document.getElementById('obLast')?.value || 'Odilov';
+    state.userData.name   = first + ' ' + last;
+    state.userData.org    = document.getElementById('obOrg')?.value || '';
+    state.userData.city   = document.getElementById('obCity')?.value || '';
+    state.userData.lang   = document.getElementById('obLang')?.value || 'uz';
+    state.userData.avatar = state.avatar;
+    state.obStep = 2;
+  } else if(state.obStep === 2){
+    if(!state.role){ alert('Rol tanlang'); return; }
+    state.userData.role = state.role;
+    state.obStep = 3;
+  }
+  render();
+}
+
+function obBack(){
+  if(state.obStep > 1) state.obStep--;
+  render();
+}
+
+function obFinish(){
+  const btn = document.querySelector('.f-btn[onclick="obFinish()"]');
+  if(btn){ btn.classList.add('loading'); btn.textContent=''; btn.disabled=true; }
+  setTimeout(()=>{ state.view='success'; render(); }, 1000);
+}
+
+function goDashboard(){
+  // Foydalanuvchi ma'lumotini localStorage'ga saqlash — dashboard buni o'qiydi
+  try{
+    localStorage.setItem('airsim_user', JSON.stringify(state.userData));
+  }catch(e){
+    console.warn('localStorage saqlashda xato:', e);
+  }
+  window.location.href = 'index2_ml.html';
+}
+
+function skipToDashboard(){
+  // Demo rejim: mehmon foydalanuvchini saqlab, dashboardga o'tish
+  try{
+    localStorage.setItem('airsim_user', JSON.stringify({
+      name:'Mehmon Foydalanuvchi',
+      email:'mehmon@airsim.uz',
+      avatar:'👤',
+      role:'guest',
+      org:'Demo rejim',
+      city:'tashkent',
+      lang:'uz'
+    }));
+  }catch(e){}
+  window.location.href = 'index2_ml.html';
+}
+
+function showForgot(){
+  root.innerHTML = `
+    <div class="form-title">Parolni tiklash 🔑</div>
+    <div class="form-sub">Email manzilingizni kiriting, tiklash havolasini yuboramiz</div>
+    <div class="f-group">
+      <label>Email manzil</label>
+      <input class="f-input" id="forgotEmail" type="email" placeholder="siz@example.com">
+    </div>
+    <button class="f-btn" id="forgotBtn" onclick="doForgot()"><span>Havola yuborish</span></button>
+    <div class="auth-switch" style="margin-top:12px"><a onclick="switchTab('login')">← Kirishga qaytish</a></div>
+  `;
+}
+
+function doForgot(){
+  const email = document.getElementById('forgotEmail')?.value;
+  if(!email){ alert('Email kiriting'); return; }
+  const btn = document.getElementById('forgotBtn');
+  btn.classList.add('loading'); btn.querySelector('span').textContent='Yuborilmoqda...'; btn.disabled=true;
+  setTimeout(()=>{
+    root.innerHTML = `
+      <div class="success-screen" style="padding:10px 0">
+        <div class="success-icon" style="font-size:24px">📧</div>
+        <h3>Havola yuborildi!</h3>
+        <p style="margin-bottom:20px">${email} manziliga parolni tiklash havolasi yuborildi. Pochta qutingizni tekshiring.</p>
+        <button class="f-btn" onclick="switchTab('login')">← Kirishga qaytish</button>
+      </div>`;
+  }, 1300);
+}
+
+function socialLogin(provider){
+  const btn = event.currentTarget;
+  btn.textContent = '⏳ Ulanmoqda...';
+  btn.disabled = true;
+  setTimeout(()=>{
+    state.userData.name = 'Abdullo Odilov';
+    state.userData.email = 'a.odilov@airsim.uz';
+    state.view = 'onboarding';
+    state.obStep = 1;
+    render();
+  }, 1000);
+}
+
+function roleLabel(r){
+  const m={analyst:'Tahlilchi',engineer:'Muhandis',scientist:'Tadqiqotchi',manager:'Menejer',student:'Talaba',other:'Foydalanuvchi'};
+  return m[r] || 'Senior Analyst';
+}
+function cityLabel(c){
+  const m={tashkent:'Toshkent',samarkand:'Samarqand',namangan:'Namangan',andijan:'Andijon',bukhara:'Buxoro',nukus:'Nukus',other:'Boshqa'};
+  return m[c] || 'Toshkent';
+}
+
+function setupInputValidation(){
+  document.getElementById('loginEmail')?.addEventListener('input', function(){
+    this.className = 'f-input ' + (this.value.includes('@') ? 'success' : '');
+  });
+}
+
+/* ─── Background particles ─── */
+(function(){
+  const canvas = document.getElementById('bgCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, pts;
+  function resize(){ W=canvas.width=innerWidth; H=canvas.height=innerHeight; }
+  function init(){
+    resize();
+    pts = Array.from({length:60},()=>({
+      x:Math.random()*W, y:Math.random()*H,
+      vx:(Math.random()-.5)*.3, vy:(Math.random()-.5)*.3,
+      r:Math.random()*1.5+.5,
+      a:Math.random()
+    }));
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    pts.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>W) p.vx*=-1;
+      if(p.y<0||p.y>H) p.vy*=-1;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(59,130,246,${p.a*.3})`;
+      ctx.fill();
+    });
+    // Connections
+    for(let i=0;i<pts.length;i++){
+      for(let j=i+1;j<pts.length;j++){
+        const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<120){
+          ctx.beginPath();
+          ctx.moveTo(pts[i].x,pts[i].y);
+          ctx.lineTo(pts[j].x,pts[j].y);
+          ctx.strokeStyle=`rgba(59,130,246,${.08*(1-d/120)})`;
+          ctx.lineWidth=.5;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize',()=>{ resize(); });
+  init(); draw();
+})();
+
+/* ─── Initial render ─── */
+render();
+</script>
+</body>
+</html>
